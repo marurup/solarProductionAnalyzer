@@ -48,5 +48,10 @@ jobs:
             echo "Ingen ændringer at committe"
           else
             git commit -m "Opdater spotpriser $(date -u +%Y-%m-%dT%H:%MZ)"
-            git push
+            # Rebase oven på eventuelle samtidige pushes (fx hvis dev pushede under backfill)
+            for i in 1 2 3; do
+              git pull --rebase origin main && git push && break
+              echo "Push fejlede (forsøg $i) — venter 5s og prøver igen"
+              sleep 5
+            done
           fi

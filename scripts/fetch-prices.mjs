@@ -157,6 +157,31 @@ async function main() {
   }
 
   console.log(`\nFærdig. Hentet: ${totalFetched} måned(er), sprunget over: ${totalSkipped}.`);
+
+  // Generér manifest så klienten kan vise hvilke måneder der findes
+  await writeManifest();
+}
+
+async function writeManifest() {
+  const manifest = { generatedAt: new Date().toISOString(), areas: {} };
+  for (const area of AREAS) {
+    const dir = `data/prices/${area}`;
+    let files = [];
+    try {
+      files = (await fs.readdir(dir))
+        .filter(f => /^\d{4}-\d{2}\.json$/.test(f))
+        .map(f => f.replace('.json', ''))
+        .sort();
+    } catch { /* mappen findes ikke */ }
+    manifest.areas[area] = {
+      monthCount: files.length,
+      firstMonth: files[0] || null,
+      lastMonth: files[files.length - 1] || null,
+      months: files,
+    };
+  }
+  await fs.writeFile('data/prices/manifest.json', JSON.stringify(manifest, null, 2) + '\n');
+  console.log(`Manifest skrevet: ${Object.entries(manifest.areas).map(([a, i]) => `${a}=${i.monthCount}m`).join(', ')}`);
 }
 
 main().catch(e => { console.error(e); process.exit(1); });

@@ -1,0 +1,19 @@
+{
+  "generatedAt": "2026-05-26T08:33:35.423668+00:00",
+  "areas": {
+    "DK1": {
+      "monthCount": 1,
+      "firstMonth": "2025-10",
+      "lastMonth": "2025-10",
+      "months": [
+        "2025-10"
+      ]
+    },
+    "DK2": {
+      "monthCount": 0,
+      "firstMonth": null,
+      "lastMonth": null,
+      "months": []
+    }
+  }
+}

@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Status — Solcelle Eksport-Analyse</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f1117; --surface: #1a1d27; --border: #2a2d3a;
+      --text: #e2e4ed; --muted: #6b7280; --accent: #f59e0b;
+      --green: #22c55e; --red: #ef4444;
+    }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: 'Inter', system-ui, sans-serif; font-size: 15px;
+      padding: 24px; max-width: 900px; margin: 0 auto;
+    }
+    h1 { font-size: 1.6rem; margin-bottom: 4px; }
+    h2 { font-size: 1.05rem; font-weight: 600; color: var(--accent); margin-bottom: 14px; }
+    h3 { font-size: 0.85rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+    p  { color: var(--muted); font-size: 0.9rem; }
+    a  { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .subtitle { color: var(--muted); margin-bottom: 24px; }
+
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; margin-bottom: 18px; }
+
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+    .stat { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+    .stat-label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .stat-value { font-size: 1.4rem; font-weight: 700; margin-top: 2px; }
+    .stat-sub   { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+
+    .btn { background: var(--border); color: var(--text); border: none; border-radius: 6px; padding: 8px 14px; font-size: 0.85rem; cursor: pointer; }
+    .btn:hover { background: #353947; }
+    .btn.danger { background: var(--red); color: #fff; }
+    .btn.danger:hover { opacity: 0.85; }
+
+    .loading { color: var(--muted); font-size: 0.85rem; font-style: italic; }
+    .empty   { color: var(--muted); font-size: 0.85rem; }
+    .month-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; max-height: 140px; overflow-y: auto; }
+    .month-pill { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px; font-size: 0.75rem; color: var(--muted); }
+
+    .nav { display: flex; gap: 16px; align-items: center; margin-bottom: 24px; font-size: 0.88rem; }
+  </style>
+</head>
+<body>
+
+<h1>📊 Status</h1>
+<p class="subtitle">Lokal cache og pre-genererede prisfiler.</p>
+
+<div class="nav">
+  <a href="./">← Tilbage til analyse</a>
+</div>
+
+<!-- IndexedDB cache -->
+<div class="card">
+  <h2>Lokal cache (din browser)</h2>
+  <p style="margin-bottom:14px">Spotpriser gemt i IndexedDB. Slettes med "Ryd cache" — alt re-fetches ved næste analyse.</p>
+  <div class="stat-grid" id="localCacheStats"><div class="loading">Indlæser...</div></div>
+  <div style="margin-top:14px">
+    <button class="btn danger" id="btnClearLocal">Ryd lokal cache</button>
+  </div>
+</div>
+
+<!-- Static manifest -->
+<div class="card">
+  <h2>Statisk cache (repo)</h2>
+  <p style="margin-bottom:14px">Pre-genererede månedsfiler committed til repo'et af GitHub Action (kører dagligt kl. 14:00 UTC).</p>
+  <div class="stat-grid" id="staticCacheStats"><div class="loading">Indlæser manifest.json...</div></div>
+  <p style="margin-top:14px; font-size:0.82rem;" id="manifestMeta"></p>
+</div>
+
+<!-- Pr. område: månedsliste -->
+<div class="card" id="monthsCard" style="display:none">
+  <h2>Måneder pr. område</h2>
+  <div id="monthsByArea"></div>
+</div>
+
+<script>
+const AREAS = ['DK1', 'DK2'];
+
+// ─── Minimal IndexedDB-læser (samme schema som index.html) ────────────────────
+function openDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('solar-analyzer', 1);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('spot-prices')) db.createObjectStore('spot-prices', { keyPath: 'key' });
+      if (!db.objectStoreNames.contains('cached-days')) db.createObjectStore('cached-days', { keyPath: 'key' });
+    };
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror   = e => reject(e.target.error);
+  });
+}
+
+async function getDayKeysForArea(db, area) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('cached-days', 'readonly');
+    const req = tx.objectStore('cached-days').getAllKeys(
+      IDBKeyRange.bound(`${area}-`, `${area}-￿`)
+    );
+    req.onsuccess = () => resolve(req.result.map(k => k.slice(area.length + 1)).sort());
+    req.onerror   = () => reject(req.error);
+  });
+}
+
+async function loadLocalCache() {
+  const el = document.getElementById('localCacheStats');
+  try {
+    const db = await openDb();
+    const cards = [];
+    for (const area of AREAS) {
+      const days = await getDayKeysForArea(db, area);
+      const range = days.length ? `${days[0]} → ${days[days.length-1]}` : '—';
+      cards.push(`
+        <div class="stat">
+          <div class="stat-label">${area}</div>
+          <div class="stat-value">${days.length.toLocaleString('da-DK')} <span style="font-size:0.85rem; color:var(--muted); font-weight:400">dage</span></div>
+          <div class="stat-sub">${range}</div>
+        </div>`);
+    }
+    el.innerHTML = cards.join('');
+  } catch (e) {
+    el.innerHTML = `<div class="empty">Kunne ikke læse IndexedDB: ${e.message}</div>`;
+  }
+}
+
+// ─── Manifest fra repo ────────────────────────────────────────────────────────
+async function loadManifest() {
+  const statsEl = document.getElementById('staticCacheStats');
+  const metaEl = document.getElementById('manifestMeta');
+  try {
+    const resp = await fetch('data/prices/manifest.json', { cache: 'no-cache' });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const m = await resp.json();
+
+    const cards = [];
+    for (const area of AREAS) {
+      const info = m.areas?.[area] || { monthCount: 0 };
+      const range = info.firstMonth ? `${info.firstMonth} → ${info.lastMonth}` : '—';
+      cards.push(`
+        <div class="stat">
+          <div class="stat-label">${area}</div>
+          <div class="stat-value">${info.monthCount.toLocaleString('da-DK')} <span style="font-size:0.85rem; color:var(--muted); font-weight:400">måneder</span></div>
+          <div class="stat-sub">${range}</div>
+        </div>`);
+    }
+    statsEl.innerHTML = cards.join('');
+
+    const fetched = new Date(m.generatedAt);
+    metaEl.textContent = `Manifest senest opdateret: ${fetched.toLocaleString('da-DK')}`;
+
+    // Månedsliste pr. område
+    const monthsCard = document.getElementById('monthsCard');
+    const monthsEl   = document.getElementById('monthsByArea');
+    if (AREAS.some(a => m.areas?.[a]?.months?.length)) {
+      monthsCard.style.display = 'block';
+      monthsEl.innerHTML = AREAS.map(area => {
+        const months = m.areas?.[area]?.months || [];
+        if (!months.length) return `<h3 style="margin-top:12px">${area}</h3><div class="empty">Ingen måneder endnu.</div>`;
+        return `
+          <h3 style="margin-top:12px">${area} (${months.length})</h3>
+          <div class="month-list">${months.map(mo => `<span class="month-pill">${mo}</span>`).join('')}</div>`;
+      }).join('');
+    }
+  } catch (e) {
+    statsEl.innerHTML = `<div class="empty">manifest.json ikke fundet endnu — backfill skal køre først (${e.message}).</div>`;
+  }
+}
+
+// ─── Knapper ──────────────────────────────────────────────────────────────────
+document.getElementById('btnClearLocal').addEventListener('click', async () => {
+  if (!confirm('Slet hele den lokale cache for alle prisområder?')) return;
+  const db = await openDb();
+  await new Promise(r => {
+    const tx = db.transaction(['spot-prices', 'cached-days'], 'readwrite');
+    tx.objectStore('spot-prices').clear();
+    tx.objectStore('cached-days').clear();
+    tx.oncomplete = r;
+  });
+  loadLocalCache();
+});
+
+loadLocalCache();
+loadManifest();
+</script>
+</body>
+</html>
