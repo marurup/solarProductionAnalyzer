@@ -332,6 +332,8 @@
 <div class="card" id="section-config">
   <h2>2. Konfigurer tariffer og priser</h2>
 
+  <div id="autoStatusBar" style="display:none; margin-bottom:16px; padding:10px 14px; background:var(--bg); border:1px solid var(--border); border-radius:6px; font-size:0.85rem;"></div>
+
   <div class="row" style="margin-bottom:16px; gap:20px;">
     <div class="field">
       <label>Prisområde</label>
@@ -346,6 +348,13 @@
       <span class="field-unit">øre/kWh — nettarif + elafgift + moms + leverandørtillæg</span>
     </div>
   </div>
+
+  <details id="overheadDetails" style="display:none; margin-top:14px; background:var(--bg); border:1px solid var(--border); border-radius:8px;">
+    <summary style="cursor:pointer; padding:10px 14px; font-size:0.85rem; color:var(--accent); font-weight:500; user-select:none;">
+      Vis udregning af overhead
+    </summary>
+    <div id="overheadBreakdown" style="padding:0 14px 14px;"></div>
+  </details>
 
   <h3>Fradrag på eksportpris</h3>
   <div class="tariff-grid" style="margin-bottom:12px;">
@@ -1514,37 +1523,134 @@ async function applyQuickConfig() {
   qcStatus.textContent = 'Henter prisbreakdown fra Strømligning...';
 
   try {
-    const url = `${SL_BASE}/prices?supplier=${cfg.supplierId}&company=${cfg.companyId}&product=${cfg.productId}&priceArea=${cfg.priceArea}`;
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const data = await resp.json();
-    const prices = data.prices || [];
-    if (!prices.length) throw new Error('tomt prissvar');
+    // 1. Hent forbrugspriser fra Strømligning
+    const slUrl = `${SL_BASE}/prices?supplier=${cfg.supplierId}&customerGroup=c&company=${cfg.companyId}&product=${cfg.productId}&priceArea=${cfg.priceArea}`;
+    const slResp = await fetch(slUrl);
+    if (!slResp.ok) throw new Error(`Strømligning: HTTP ${slResp.status}`);
+    const slData = await slResp.json();
+    const slPrices = slData.prices || [];
+    if (!slPrices.length) throw new Error('Strømligning returnerede ingen priser');
 
-    // Beregn gennemsnitlig overhead = total - electricity (alt undtagen rent spot/markedspris)
-    // value/total er kr/kWh; overhead = (total - electricity.total) i kr/kWh → øre/kWh × 100
-    let sumOverhead = 0, n = 0;
-    for (const p of prices) {
-      const total = p.price?.total ?? 0;
-      const elec  = p.details?.electricity?.total ?? 0;
-      sumOverhead += (total - elec);
+    // 2. Find dækkede dage
+    const days = [...new Set(slPrices.map(p => p.localDate?.slice(0, 10)).filter(Boolean))].sort();
+    if (!days.length) throw new Error('Kunne ikke udlede datoer fra Strømligning-svar');
+
+    // 3. Hent matchende spot fra vores egen cache (statisk fil + DayAheadPrices)
+    qcStatus.textContent = `Henter matchende spotpriser for ${days[0]} → ${days[days.length-1]}...`;
+    const spotMap = await fetchSpotPrices(days[0], days[days.length-1], cfg.priceArea, null);
+
+    // 4. Beregn overhead per time = strømligning.total - vores spot
+    let sumOverhead = 0, sumTotal = 0, sumSpot = 0;
+    let sumElectricity = 0, sumElectricityTax = 0, sumVat = 0;
+    let n = 0, missingSpot = 0;
+
+    for (const p of slPrices) {
+      const hourKey = p.localDate?.slice(0, 13);
+      if (!hourKey) continue;
+      const spotOere = spotMap.get(hourKey);
+      if (spotOere == null) { missingSpot++; continue; }
+
+      const totalOere       = (p.price?.total ?? 0) * 100;
+      const vatOere         = (p.price?.vat ?? 0) * 100;
+      const electricityOere = (p.details?.electricity?.total ?? 0) * 100;
+      const elTaxOere       = (p.details?.electricityTax?.total ?? 0) * 100;
+
+      sumOverhead       += totalOere - spotOere;
+      sumTotal          += totalOere;
+      sumSpot           += spotOere;
+      sumElectricity    += electricityOere;
+      sumElectricityTax += elTaxOere;
+      sumVat            += vatOere;
       n++;
     }
-    const avgOverheadOere = n > 0 ? Math.round((sumOverhead / n) * 100) : null;
 
-    if (avgOverheadOere != null) {
-      document.getElementById('selfConsumpOverhead').value = avgOverheadOere;
-      saveConfig({ overheadOere: avgOverheadOere });
-      qcStatus.style.color = 'var(--green)';
-      qcStatus.innerHTML = `✓ Selvforbrugs-overhead sat til <strong>${avgOverheadOere} øre/kWh</strong> (gennemsnit over ${n} timer fra Strømligning).`;
-    } else {
-      qcStatus.style.color = 'var(--accent)';
-      qcStatus.textContent = 'Priser hentet, men kunne ikke beregne overhead — kontrollér manuelt.';
-    }
+    if (n === 0) throw new Error('Ingen timer kunne matches med spotpris-cachen');
+
+    const avgOverhead = Math.round(sumOverhead / n);
+    const breakdown = {
+      n, missingSpot,
+      period: `${days[0]} → ${days[days.length-1]}`,
+      avgSpotOere:           sumSpot / n,
+      avgTotalOere:          sumTotal / n,
+      avgOverheadOere:       avgOverhead,
+      avgElectricityOere:    sumElectricity / n,
+      avgElectricityTaxOere: sumElectricityTax / n,
+      avgVatOere:            sumVat / n,
+      computedAt: new Date().toISOString(),
+    };
+
+    document.getElementById('selfConsumpOverhead').value = avgOverhead;
+    saveConfig({ overheadOere: avgOverhead, overheadBreakdown: breakdown });
+
+    qcStatus.style.color = 'var(--green)';
+    qcStatus.innerHTML = `✓ Overhead sat til <strong>${avgOverhead} øre/kWh</strong> (gennemsnit over ${n} timer). <a href="#" id="qcShowDetails" style="color:var(--accent)">Vis udregning</a>`;
+    document.getElementById('qcShowDetails').addEventListener('click', e => {
+      e.preventDefault();
+      const det = document.getElementById('overheadDetails');
+      if (det) { det.open = true; det.scrollIntoView({ behavior:'smooth', block:'center' }); }
+    });
+    renderOverheadBreakdown();
+    renderAutoDiscoveryStatus();
   } catch (e) {
     qcStatus.style.color = 'var(--red)';
     qcStatus.textContent = `Fejl: ${e.message}`;
   }
+}
+
+function renderOverheadBreakdown() {
+  const cfg = loadConfig();
+  const b = cfg.overheadBreakdown;
+  const det = document.getElementById('overheadDetails');
+  if (!det || !b) return;
+
+  const fmt = v => (v == null ? '—' : v.toFixed(2).replace('.', ',') + ' øre/kWh');
+  const avgOther = b.avgTotalOere - b.avgElectricityOere - b.avgElectricityTaxOere;
+
+  document.getElementById('overheadBreakdown').innerHTML = `
+    <p style="font-size:0.83rem; line-height:1.6; margin-bottom:10px;">
+      <strong>Formlen:</strong> overhead = <em>strømligning.total − vores_spot</em>, gennemsnit over hver time.<br>
+      Det betyder "alt det du ville have betalt udover spotprisen, hvis du i stedet købte den kWh fra nettet" — nettarif, elafgift, leverandørtillæg, og moms på alt.
+    </p>
+    <table style="width:100%; font-size:0.85rem; border-collapse:collapse;">
+      <tr><td colspan="2" style="padding:6px 0; color:var(--muted); font-size:0.78rem;">PERIODE OG DÆKNING</td></tr>
+      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Periode</td><td>${b.period}</td></tr>
+      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Timer brugt</td><td>${b.n}${b.missingSpot ? ` (${b.missingSpot} sprunget over pga. manglende spot)` : ''}</td></tr>
+      <tr><td colspan="2" style="padding:10px 0 6px; color:var(--muted); font-size:0.78rem;">GENNEMSNIT PR. TIME</td></tr>
+      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Vores spot (EDS, uden moms)</td><td>${fmt(b.avgSpotOere)}</td></tr>
+      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Strømligning total (med moms)</td><td>${fmt(b.avgTotalOere)}</td></tr>
+      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">→ Heraf moms (25%)</td><td>${fmt(b.avgVatOere)}</td></tr>
+      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">→ Heraf electricity (spot+leverandør+moms)</td><td>${fmt(b.avgElectricityOere)}</td></tr>
+      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">→ Heraf elafgift (med moms)</td><td>${fmt(b.avgElectricityTaxOere)}</td></tr>
+      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">→ Heraf andet (transport, distribution m.m.)</td><td>${fmt(avgOther)}</td></tr>
+      <tr><td colspan="2" style="padding:10px 0 6px 0; border-top:1px solid var(--border); color:var(--accent); font-weight:600;">
+        Overhead = total − spot = <strong>${fmt(b.avgOverheadOere)}</strong>
+      </td></tr>
+    </table>
+    <p style="font-size:0.78rem; color:var(--muted); margin-top:10px;">
+      Beregnet ${new Date(b.computedAt).toLocaleString('da-DK')}. Tariffer er stort set statiske — kun nettariffen varierer let med time-på-døgnet, men gennemsnittet over flere døgn er en god approximation.
+    </p>
+  `;
+  det.style.display = 'block';
+}
+
+function renderAutoDiscoveryStatus() {
+  const cfg = loadConfig();
+  const el = document.getElementById('autoStatusBar');
+  if (!el) return;
+  const auto = [];
+  const manual = [];
+  if (cfg.priceArea)    auto.push('Prisområde'); else manual.push('Prisområde');
+  if (cfg.supplierId)   auto.push('Netselskab');  // — kun info, mapping til t3 mangler
+  if (cfg.overheadOere) auto.push('Selvforbrugs-overhead'); else manual.push('Selvforbrugs-overhead');
+  // De fire eksport-tariffer er ikke auto-udfyldt endnu
+  manual.push('Eksport-fradrag (t1–t4)');
+
+  el.style.display = 'block';
+  el.innerHTML = `
+    <strong>Auto-udfyldt fra adresse:</strong> ${auto.length ? auto.join(', ') : '— intet endnu'}
+    <br>
+    <strong style="color:var(--accent)">Skal du selv kontrollere/udfylde:</strong> ${manual.join(', ')}
+  `;
 }
 
 btnApply.addEventListener('click', applyQuickConfig);
@@ -1570,6 +1676,9 @@ btnApply.addEventListener('click', applyQuickConfig);
     } catch {}
   }
   if (cfg.priceArea) await populateSuppliers(cfg.priceArea, null, foundList);
+
+  renderAutoDiscoveryStatus();
+  if (cfg.overheadBreakdown) renderOverheadBreakdown();
 })();
 
 // ─── UI wiring ────────────────────────────────────────────────────────────────
