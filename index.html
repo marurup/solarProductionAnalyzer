@@ -1483,7 +1483,12 @@ async function populateCompanies() {
 
 function onCompanyChange() {
   const id = companySelect.value;
-  saveConfig({ companyId: id, productId: null });
+  // Bevar productId hvis elselskabet er det samme som før (page-load/reload-scenarie);
+  // nulstil kun når brugeren faktisk skifter til et andet elselskab.
+  const prev = loadConfig();
+  const sameCompany = prev.companyId === id;
+  saveConfig({ companyId: id, productId: sameCompany ? prev.productId : null });
+
   const company = (window._slCompanies || []).find(c => c._id === id);
   if (!company || !company.products?.length) {
     productSelect.innerHTML = '<option value="">— ingen produkter —</option>';
