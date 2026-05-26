@@ -32,26 +32,30 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Hent spotpriser
+      - name: Konfigurer git
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Hent spotpriser (committer løbende)
         env:
           START_DATE:   ${{ github.event.inputs.start_date }}
           END_DATE:     ${{ github.event.inputs.end_date }}
           FORCE_UPDATE: ${{ github.event.inputs.force_update }}
+          COMMIT_EVERY: '5'
         run: node scripts/fetch-prices.mjs
 
-      - name: Commit ændringer
+      - name: Sikkerhedsnet — commit eventuelle resterende ændringer
+        if: always()
         run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/prices
           if git diff --staged --quiet; then
-            echo "Ingen ændringer at committe"
+            echo "Ingen ucommitterede ændringer"
           else
-            git commit -m "Opdater spotpriser $(date -u +%Y-%m-%dT%H:%MZ)"
-            # Rebase oven på eventuelle samtidige pushes (fx hvis dev pushede under backfill)
+            git commit -m "Final commit ved workflow-afslutning $(date -u +%Y-%m-%dT%H:%MZ)"
             for i in 1 2 3; do
               git pull --rebase origin main && git push && break
-              echo "Push fejlede (forsøg $i) — venter 5s og prøver igen"
+              echo "Push forsøg $i fejlede — venter 5s"
               sleep 5
             done
           fi

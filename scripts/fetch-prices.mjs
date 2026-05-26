@@ -4,21 +4,56 @@
 // men kan også køres lokalt: `node scripts/fetch-prices.mjs`.
 //
 // Env vars (alle valgfri):
-//   START_DATE=YYYY-MM-DD   (default: 2021-01-01)
-//   END_DATE=YYYY-MM-DD     (default: i morgen)
-//   FORCE_UPDATE=1          (gen-fetch også gamle, komplette måneder)
-//   AREAS=DK1,DK2           (default: begge)
+//   START_DATE=YYYY-MM-DD     (default: 2021-01-01)
+//   END_DATE=YYYY-MM-DD       (default: i morgen)
+//   FORCE_UPDATE=1            (gen-fetch også gamle, komplette måneder)
+//   AREAS=DK1,DK2             (default: begge)
+//   COMMIT_EVERY=10           (committer efter N skrevne filer; 0 = aldrig)
 
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import { execSync } from 'node:child_process';
 
 const CUTOFF = '2025-10-01';            // Elspotprices → DayAheadPrices
 const DEFAULT_START = '2021-01-01';
-const SLEEP_BETWEEN_CALLS_MS = 5000;    // vær flink ved API'et
+const SLEEP_BETWEEN_CALLS_MS = 3000;    // vær flink ved API'et (reduceret fra 5s)
 const RATE_LIMIT_MAX_ATTEMPTS = 6;
 
 const AREAS = (process.env.AREAS || 'DK1,DK2').split(',').map(s => s.trim());
 const FORCE_UPDATE = process.env.FORCE_UPDATE === '1';
+const COMMIT_EVERY = parseInt(process.env.COMMIT_EVERY || '10', 10);
+
+function commitProgress(reason) {
+  if (COMMIT_EVERY === 0) return;
+  try {
+    execSync('git add data/prices', { stdio: 'pipe' });
+    // Tjek om der er noget at committe
+    try {
+      execSync('git diff --staged --quiet', { stdio: 'pipe' });
+      return; // ingen ændringer
+    } catch { /* der ER ændringer */ }
+
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 16);
+    execSync(`git commit -m "Backfill progress: ${reason} (${stamp}Z)"`, { stdio: 'pipe' });
+
+    // Rebase oven på eventuelle samtidige pushes, retry 3 gange
+    let pushed = false;
+    for (let i = 0; i < 3; i++) {
+      try {
+        execSync('git pull --rebase origin main', { stdio: 'pipe' });
+        execSync('git push origin main', { stdio: 'pipe' });
+        pushed = true;
+        break;
+      } catch (e) {
+        console.error(`  push forsøg ${i+1} fejlede: ${e.message.split('\n')[0]}`);
+        if (i < 2) execSync('sleep 3');
+      }
+    }
+    console.log(`  📦 ${pushed ? 'committed + pushed' : 'committed (push fejlede)'}: ${reason}`);
+  } catch (e) {
+    console.error(`  Commit fejlede: ${e.message.split('\n')[0]}`);
+  }
+}
 
 function isoDay(date) { return date.toISOString().slice(0, 10); }
 function lastDayOfMonth(year, month) { return new Date(Date.UTC(year, month, 0)).getUTCDate(); }
@@ -149,6 +184,12 @@ async function main() {
         console.log(`    ${Object.keys(prices).length} timer skrevet til ${filePath}`);
         totalFetched++;
 
+        // Committer løbende så vi ikke mister arbejde hvis runneren timer ud
+        if (COMMIT_EVERY > 0 && totalFetched % COMMIT_EVERY === 0) {
+          await writeManifest();
+          commitProgress(`${totalFetched} måneder hentet (sidst: ${area} ${ym})`);
+        }
+
         await sleep(SLEEP_BETWEEN_CALLS_MS);
       } catch (e) {
         console.error(`    FEJL: ${e.message}`);
@@ -160,6 +201,8 @@ async function main() {
 
   // Generér manifest så klienten kan vise hvilke måneder der findes
   await writeManifest();
+  // Final commit hvis der er ucommittet arbejde
+  if (COMMIT_EVERY > 0) commitProgress(`afsluttet (${totalFetched} hentet, ${totalSkipped} sprunget over)`);
 }
 
 async function writeManifest() {
