@@ -405,7 +405,6 @@
 
   <div style="margin-top: 20px; display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
     <button class="btn" id="btnAnalyze" disabled>Hent spotpriser og analyser</button>
-    <button class="btn" id="btnStop" style="display:none; background:var(--red); color:#fff;">Stop</button>
     <button class="btn btn-secondary" id="btnClearCache" style="font-size:0.82rem; padding:8px 16px;">Ryd cache</button>
     <span id="cacheStatus" style="font-size:0.82rem; color:var(--muted);">Indlæser cache...</span>
   </div>
@@ -612,7 +611,6 @@ const state = {
   sortCol: 'tabtFortjenesteDKK',
   sortDir: -1,
   cache: new SpotPriceCache(),
-  abortController: null,
 };
 
 const log = (() => {
@@ -826,9 +824,9 @@ function uniqueMonths(days) {
 
 // Henter én månedsfil fra repo'et, gemmer timerne i IndexedDB. Returner antal
 // timer skrevet, eller null hvis filen ikke findes endnu.
-async function loadStaticMonth(priceArea, ym, cache, signal) {
+async function loadStaticMonth(priceArea, ym, cache) {
   try {
-    const resp = await fetch(`data/prices/${priceArea}/${ym}.json`, { signal, cache: 'no-cache' });
+    const resp = await fetch(`data/prices/${priceArea}/${ym}.json`, { cache: 'no-cache' });
     if (!resp.ok) return null;
     const data = await resp.json();
     const prices = data.prices || {};
@@ -843,8 +841,7 @@ async function loadStaticMonth(priceArea, ym, cache, signal) {
       await cache.storeDayPrices(priceArea, day, records);
     }
     return Object.keys(prices).length;
-  } catch (e) {
-    if (e.name === 'AbortError') throw e;
+  } catch {
     return null;
   }
 }
@@ -852,7 +849,7 @@ async function loadStaticMonth(priceArea, ym, cache, signal) {
 // Læs spotpriser for [startDay, endDay] fra IndexedDB-cache; hvis manglende
 // dage findes, hent de relevante månedsfiler. Kaster fejl hvis nogle måneder
 // stadig mangler bagefter (= backfill er ikke nået dertil endnu).
-async function fetchSpotPrices(startDay, endDay, priceArea, signal) {
+async function fetchSpotPrices(startDay, endDay, priceArea) {
   const cache = state.cache;
 
   let missingDays = await cache.getMissingDays(priceArea, startDay, endDay);
@@ -870,8 +867,7 @@ async function fetchSpotPrices(startDay, endDay, priceArea, signal) {
 
   const missingMonths = [];
   for (const ym of monthsNeeded) {
-    if (signal?.aborted) throw new DOMException('Afbrudt', 'AbortError');
-    const hours = await loadStaticMonth(priceArea, ym, cache, signal);
+    const hours = await loadStaticMonth(priceArea, ym, cache);
     if (hours !== null) log.info(`  ${ym}: ${hours} timer indlæst`);
     else { log.warn(`  ${ym}: mangler i statisk cache`); missingMonths.push(ym); }
   }
@@ -1659,13 +1655,8 @@ document.getElementById('btnAnalyze').addEventListener('click', async () => {
   const statusBar = document.getElementById('analyzeStatus');
   const statusText = document.getElementById('analyzeStatusText');
   const btnAnalyze = document.getElementById('btnAnalyze');
-  const btnStop = document.getElementById('btnStop');
-
-  state.abortController = new AbortController();
-  const signal = state.abortController.signal;
 
   btnAnalyze.disabled = true;
-  btnStop.style.display = '';
   statusBar.style.display = 'flex';
 
   try {
@@ -1677,16 +1668,15 @@ document.getElementById('btnAnalyze').addEventListener('click', async () => {
     log.info(`Analyse startet: ${rows.length} timer, ${startDay} → ${endDay}, ${priceArea}`);
     statusText.textContent = `Tjekker cache...`;
 
-    // Åbn debug-tab med det samme så log er synlig under API-kald
+    // Åbn debug-tab med det samme så log er synlig under loading
     document.getElementById('results').style.display = 'block';
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
     document.querySelector('.tab[data-tab="debug"]').classList.add('active');
     document.getElementById('tab-debug').classList.add('active');
-    const spotPrices = await fetchSpotPrices(startDay, endDay, priceArea, signal);
-    state.spotPrices = spotPrices;
 
-    if (signal.aborted) return;
+    const spotPrices = await fetchSpotPrices(startDay, endDay, priceArea);
+    state.spotPrices = spotPrices;
 
     statusText.textContent = 'Analyserer data...';
     const data = analyze(rows, spotPrices, tariffs);
@@ -1695,24 +1685,12 @@ document.getElementById('btnAnalyze').addEventListener('click', async () => {
     statusText.textContent = `Analyse færdig — ${data.length} timer analyseret`;
     renderResults(data, tariffs);
   } catch (e) {
-    if (e.name === 'AbortError') {
-      log.info('Analyse stoppet af bruger');
-      statusText.textContent = 'Stoppet';
-    } else {
-      log.error(`Analyse fejlede: ${e.message}`);
-      statusText.textContent = `Fejl: ${e.message}`;
-    }
+    log.error(`Analyse fejlede: ${e.message}`);
+    statusText.textContent = `Fejl: ${e.message}`;
   } finally {
     btnAnalyze.disabled = false;
-    btnStop.style.display = 'none';
-    state.abortController = null;
     setTimeout(() => { statusBar.style.display = 'none'; }, 4000);
   }
-});
-
-document.getElementById('btnStop').addEventListener('click', () => {
-  state.abortController?.abort();
-  document.getElementById('btnStop').style.display = 'none';
 });
 
 document.getElementById('btnExportCSV').addEventListener('click', exportCSV);
