@@ -1343,27 +1343,53 @@ async function dawaAutocomplete(query) {
 async function selectAddress(item) {
   suggBox.style.display = 'none';
   addressInput.value = item.tekst;
-  // Hent fulde adresseoplysninger for at få postnummer
-  let zip = null;
+
+  // Hent fulde adresseoplysninger for at få postnummer + koordinater
+  let zip = null, lat = null, lng = null;
   if (item.data?.href) {
     try {
       const resp = await fetch(item.data.href);
       if (resp.ok) {
         const adr = await resp.json();
-        zip = adr.postnr?.nr || adr.adgangsadresse?.postnummer?.nr || null;
+        zip = adr.adgangsadresse?.postnummer?.nr || null;
+        const k = adr.adgangsadresse?.adgangspunkt?.koordinater;
+        if (Array.isArray(k) && k.length === 2) { lng = k[0]; lat = k[1]; }
       }
     } catch {}
   }
-  // Fallback: ekstrahér postnummer fra teksten ("Vej 1, 2200 København N")
   if (!zip) {
     const m = item.tekst.match(/\b(\d{4})\b/);
     if (m) zip = m[1];
   }
-  const priceArea = zipToPriceArea(zip);
-  addressHint.textContent = zip ? `Postnummer ${zip} — prisområde ${priceArea}` : 'Postnummer kunne ikke udledes';
-  saveConfig({ address: item.tekst, zip, priceArea });
+
+  // Find netselskab præcist via koordinater (Strømligning /api/suppliers/find)
+  let foundSuppliers = null, priceArea = null;
+  if (lat != null && lng != null) {
+    try {
+      const r = await fetch(`${SL_BASE}/suppliers/find?lat=${lat}&long=${lng}`);
+      if (r.ok) {
+        const list = await r.json();
+        foundSuppliers = Array.isArray(list) ? list : [list];
+        if (foundSuppliers.length && foundSuppliers[0].priceArea) priceArea = foundSuppliers[0].priceArea;
+      }
+    } catch {}
+  }
+  if (!priceArea) priceArea = zipToPriceArea(zip); // fallback
+
+  const hint = [
+    zip && `Postnummer ${zip}`,
+    priceArea && `prisområde ${priceArea}`,
+    foundSuppliers?.length === 1 && `netselskab: ${foundSuppliers[0].name}`,
+    foundSuppliers?.length > 1 && `${foundSuppliers.length} netselskaber matchede — vælg`,
+  ].filter(Boolean).join(' — ');
+  addressHint.textContent = hint || 'Postnummer/prisområde kunne ikke udledes';
+
+  saveConfig({ address: item.tekst, zip, priceArea, lat, lng });
   if (priceArea) document.getElementById('priceArea').value = priceArea;
-  await populateSuppliers(priceArea);
+
+  // Populér netselskab-dropdown og pre-vælg fundet match
+  const preselectId = foundSuppliers?.[0]?.id || null;
+  await populateSuppliers(priceArea, preselectId, foundSuppliers);
 }
 
 addressInput.addEventListener('input', e => {
@@ -1381,21 +1407,42 @@ const productSelect  = document.getElementById('productSelect');
 const btnApply       = document.getElementById('btnApplyConfig');
 const qcStatus       = document.getElementById('quickConfigStatus');
 
-async function populateSuppliers(priceArea) {
+async function populateSuppliers(priceArea, preselectId = null, foundList = null) {
   try {
     const all = await cachedJson('sl-suppliers', `${SL_BASE}/suppliers`);
     const filtered = priceArea ? all.filter(s => s.priceArea === priceArea) : all;
     filtered.sort((a, b) => a.name.localeCompare(b.name, 'da'));
-    supplierSelect.innerHTML =
-      `<option value="">— vælg netselskab —</option>` +
-      filtered.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
-    // Pre-vælg fra gemt konfig hvis muligt
+
+    // Hvis Strømligning fandt præcis ét match, hop direkte til "fundet"-tilstand med option-grupper
+    const foundIds = new Set((foundList || []).map(s => s.id));
+    const opts = [`<option value="">— vælg netselskab —</option>`];
+    if (foundIds.size) {
+      opts.push(`<optgroup label="Fundet for din adresse">`);
+      for (const s of filtered.filter(s => foundIds.has(s.id))) {
+        opts.push(`<option value="${s.id}">${s.name}</option>`);
+      }
+      opts.push(`</optgroup>`);
+      const others = filtered.filter(s => !foundIds.has(s.id));
+      if (others.length) {
+        opts.push(`<optgroup label="Øvrige i ${priceArea}">`);
+        for (const s of others) opts.push(`<option value="${s.id}">${s.name}</option>`);
+        opts.push(`</optgroup>`);
+      }
+    } else {
+      for (const s of filtered) opts.push(`<option value="${s.id}">${s.name}</option>`);
+    }
+    supplierSelect.innerHTML = opts.join('');
+
+    // Pre-select: forrige valg > foundList > intet
     const cfg = loadConfig();
-    if (cfg.supplierId && filtered.find(s => s.id === cfg.supplierId)) {
-      supplierSelect.value = cfg.supplierId;
+    const targetId = preselectId || (cfg.supplierId && filtered.find(s => s.id === cfg.supplierId) ? cfg.supplierId : null);
+    if (targetId) {
+      supplierSelect.value = targetId;
       onSupplierChange();
     }
-    document.getElementById('supplierHint').textContent = `${filtered.length} netselskaber i ${priceArea}`;
+    document.getElementById('supplierHint').textContent = foundIds.size === 1
+      ? `Auto-detekteret: ${filtered.find(s => foundIds.has(s.id))?.name}`
+      : `${filtered.length} netselskaber i ${priceArea}`;
   } catch (e) {
     document.getElementById('supplierHint').textContent = `Kunne ikke hente: ${e.message}`;
   }
@@ -1513,7 +1560,16 @@ btnApply.addEventListener('click', applyQuickConfig);
   if (cfg.priceArea) document.getElementById('priceArea').value = cfg.priceArea;
   if (cfg.overheadOere) document.getElementById('selfConsumpOverhead').value = cfg.overheadOere;
   await populateCompanies();
-  if (cfg.priceArea) await populateSuppliers(cfg.priceArea);
+
+  // Hvis vi har gemte koordinater, gen-bekræft netselskab via /suppliers/find for at vise auto-match
+  let foundList = null;
+  if (cfg.lat != null && cfg.lng != null) {
+    try {
+      const r = await fetch(`${SL_BASE}/suppliers/find?lat=${cfg.lat}&long=${cfg.lng}`);
+      if (r.ok) foundList = await r.json();
+    } catch {}
+  }
+  if (cfg.priceArea) await populateSuppliers(cfg.priceArea, null, foundList);
 })();
 
 // ─── UI wiring ────────────────────────────────────────────────────────────────
