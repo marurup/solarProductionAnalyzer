@@ -201,6 +201,11 @@
     .row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
     .spacer { flex: 1; }
 
+    /* Address autocomplete */
+    .suggestion-item { padding: 8px 12px; cursor: pointer; border-bottom: 1px solid var(--border); font-size: 0.88rem; }
+    .suggestion-item:last-child { border-bottom: none; }
+    .suggestion-item:hover, .suggestion-item.active { background: rgba(245,158,11,0.1); color: var(--accent); }
+
     /* Lightbox */
     #lightbox {
       display: none; position: fixed; inset: 0;
@@ -284,6 +289,43 @@
   </div>
 
   <div class="debug-log" id="parseLog">Afventer CSV-filer...</div>
+</div>
+
+<!-- Quick-konfig via adresse + Strømligning -->
+<div class="card" id="section-quickconfig">
+  <h2>1½. Quick-konfiguration via adresse <span style="color:var(--muted); font-size:0.78rem; font-weight:400">(valgfrit)</span></h2>
+  <p style="margin-bottom:14px">Skriv din adresse, vælg dit netselskab og elaftale — så udfyldes selvforbrugs-overhead automatisk ud fra <a href="https://stromligning.dk" target="_blank" style="color:var(--accent)">Strømligning</a>. Indstillingerne gemmes lokalt i din browser.</p>
+
+  <div class="field" style="margin-bottom:14px; position:relative;">
+    <label>Adresse</label>
+    <input type="text" id="addressInput" placeholder="Begynd at skrive — fx 'Nørrebrogade 1, 2200'" autocomplete="off" style="width:100%; background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:8px 12px; color:var(--text); font-size:0.95rem;">
+    <div id="addressSuggestions" style="display:none; position:absolute; top:100%; left:0; right:0; background:var(--surface); border:1px solid var(--border); border-radius:6px; margin-top:2px; max-height:240px; overflow-y:auto; z-index:50;"></div>
+    <span class="field-unit" id="addressHint" style="margin-top:6px;"></span>
+  </div>
+
+  <div class="tariff-grid" style="margin-bottom:14px;">
+    <div class="field">
+      <label>Netselskab</label>
+      <select id="supplierSelect"><option value="">— vælg adresse først —</option></select>
+      <span class="field-unit" id="supplierHint"></span>
+    </div>
+    <div class="field">
+      <label>Elselskab</label>
+      <select id="companySelect"><option value="">— vælg —</option></select>
+    </div>
+  </div>
+
+  <div class="tariff-grid" style="margin-bottom:14px;">
+    <div class="field">
+      <label>Elaftale</label>
+      <select id="productSelect"><option value="">— vælg elselskab først —</option></select>
+    </div>
+    <div class="field" style="align-self:end;">
+      <button class="btn" id="btnApplyConfig" disabled>Anvend konfiguration</button>
+    </div>
+  </div>
+
+  <div id="quickConfigStatus" style="display:none; font-size:0.83rem; padding:10px 14px; background:rgba(34,197,94,0.08); border:1px solid rgba(34,197,94,0.25); border-radius:6px; color:var(--green);"></div>
 </div>
 
 <!-- STEP 2: Tariff config -->
@@ -1236,6 +1278,243 @@ function sortTable(col) {
   else { state.sortCol = col; state.sortDir = -1; }
   if (state.analysisData) renderBadHoursTable(state.analysisData, getTariffs());
 }
+
+// ─── Quick-konfig: DAWA + Strømligning ───────────────────────────────────────
+
+const CONFIG_KEY = 'solar-analyzer-config-v1';
+const SL_CACHE_TTL = 24 * 3600 * 1000; // 24 timer
+
+function saveConfig(patch) {
+  const cur = loadConfig();
+  const next = { ...cur, ...patch, savedAt: new Date().toISOString() };
+  localStorage.setItem(CONFIG_KEY, JSON.stringify(next));
+  return next;
+}
+function loadConfig() {
+  try { return JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}'); }
+  catch { return {}; }
+}
+
+// Postnummer → prisområde (rimelig approximation; brugeren kan korrigere bagefter)
+function zipToPriceArea(zip) {
+  const n = parseInt(zip, 10);
+  if (isNaN(n)) return null;
+  return n < 5000 ? 'DK2' : 'DK1'; // 1000-4999 = Sjælland+øer (inkl. Bornholm 3700-3790), 5000-9999 = Fyn+Jylland
+}
+
+// Sessionsbaseret cache så vi ikke hamrer Strømligning ved hvert besøg
+async function cachedJson(key, url) {
+  const cached = sessionStorage.getItem(key);
+  if (cached) {
+    const { fetchedAt, data } = JSON.parse(cached);
+    if (Date.now() - new Date(fetchedAt).getTime() < SL_CACHE_TTL) return data;
+  }
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`${url}: HTTP ${resp.status}`);
+  const data = await resp.json();
+  sessionStorage.setItem(key, JSON.stringify({ fetchedAt: new Date().toISOString(), data }));
+  return data;
+}
+
+// ─── DAWA adresse-autocomplete ────────────────────────────────────────────────
+
+let dawaTimer = null;
+const addressInput = document.getElementById('addressInput');
+const suggBox = document.getElementById('addressSuggestions');
+const addressHint = document.getElementById('addressHint');
+
+async function dawaAutocomplete(query) {
+  if (!query || query.length < 3) { suggBox.style.display = 'none'; return; }
+  try {
+    const resp = await fetch(`https://api.dataforsyningen.dk/autocomplete?q=${encodeURIComponent(query)}&type=adresse&per_side=8`);
+    if (!resp.ok) return;
+    const items = await resp.json();
+    if (!items.length) { suggBox.style.display = 'none'; return; }
+    suggBox.innerHTML = items.map((it, i) =>
+      `<div class="suggestion-item" data-idx="${i}">${it.tekst}</div>`
+    ).join('');
+    suggBox.style.display = 'block';
+    [...suggBox.querySelectorAll('.suggestion-item')].forEach((el, i) => {
+      el.addEventListener('click', () => selectAddress(items[i]));
+    });
+  } catch { /* netværksfejl — ignorer */ }
+}
+
+async function selectAddress(item) {
+  suggBox.style.display = 'none';
+  addressInput.value = item.tekst;
+  // Hent fulde adresseoplysninger for at få postnummer
+  let zip = null;
+  if (item.data?.href) {
+    try {
+      const resp = await fetch(item.data.href);
+      if (resp.ok) {
+        const adr = await resp.json();
+        zip = adr.postnr?.nr || adr.adgangsadresse?.postnummer?.nr || null;
+      }
+    } catch {}
+  }
+  // Fallback: ekstrahér postnummer fra teksten ("Vej 1, 2200 København N")
+  if (!zip) {
+    const m = item.tekst.match(/\b(\d{4})\b/);
+    if (m) zip = m[1];
+  }
+  const priceArea = zipToPriceArea(zip);
+  addressHint.textContent = zip ? `Postnummer ${zip} — prisområde ${priceArea}` : 'Postnummer kunne ikke udledes';
+  saveConfig({ address: item.tekst, zip, priceArea });
+  if (priceArea) document.getElementById('priceArea').value = priceArea;
+  await populateSuppliers(priceArea);
+}
+
+addressInput.addEventListener('input', e => {
+  clearTimeout(dawaTimer);
+  dawaTimer = setTimeout(() => dawaAutocomplete(e.target.value), 250);
+});
+addressInput.addEventListener('blur', () => setTimeout(() => suggBox.style.display = 'none', 200));
+
+// ─── Strømligning suppliers + companies ───────────────────────────────────────
+
+const SL_BASE = 'https://stromligning.dk/api';
+const supplierSelect = document.getElementById('supplierSelect');
+const companySelect  = document.getElementById('companySelect');
+const productSelect  = document.getElementById('productSelect');
+const btnApply       = document.getElementById('btnApplyConfig');
+const qcStatus       = document.getElementById('quickConfigStatus');
+
+async function populateSuppliers(priceArea) {
+  try {
+    const all = await cachedJson('sl-suppliers', `${SL_BASE}/suppliers`);
+    const filtered = priceArea ? all.filter(s => s.priceArea === priceArea) : all;
+    filtered.sort((a, b) => a.name.localeCompare(b.name, 'da'));
+    supplierSelect.innerHTML =
+      `<option value="">— vælg netselskab —</option>` +
+      filtered.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+    // Pre-vælg fra gemt konfig hvis muligt
+    const cfg = loadConfig();
+    if (cfg.supplierId && filtered.find(s => s.id === cfg.supplierId)) {
+      supplierSelect.value = cfg.supplierId;
+      onSupplierChange();
+    }
+    document.getElementById('supplierHint').textContent = `${filtered.length} netselskaber i ${priceArea}`;
+  } catch (e) {
+    document.getElementById('supplierHint').textContent = `Kunne ikke hente: ${e.message}`;
+  }
+}
+
+function onSupplierChange() {
+  const id = supplierSelect.value;
+  saveConfig({ supplierId: id });
+  updateApplyState();
+}
+
+async function populateCompanies() {
+  try {
+    const companies = await cachedJson('sl-companies', `${SL_BASE}/companies`);
+    companies.sort((a, b) => a.name.localeCompare(b.name, 'da'));
+    companySelect.innerHTML =
+      `<option value="">— vælg elselskab —</option>` +
+      companies.map(c => `<option value="${c._id}">${c.name}</option>`).join('');
+    window._slCompanies = companies;
+    const cfg = loadConfig();
+    if (cfg.companyId && companies.find(c => c._id === cfg.companyId)) {
+      companySelect.value = cfg.companyId;
+      onCompanyChange();
+    }
+  } catch (e) {
+    log.warn(`Kunne ikke hente elselskaber: ${e.message}`);
+  }
+}
+
+function onCompanyChange() {
+  const id = companySelect.value;
+  saveConfig({ companyId: id, productId: null });
+  const company = (window._slCompanies || []).find(c => c._id === id);
+  if (!company || !company.products?.length) {
+    productSelect.innerHTML = '<option value="">— ingen produkter —</option>';
+    updateApplyState();
+    return;
+  }
+  productSelect.innerHTML =
+    `<option value="">— vælg elaftale —</option>` +
+    company.products.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+  const cfg = loadConfig();
+  if (cfg.productId && company.products.find(p => p.id === cfg.productId)) {
+    productSelect.value = cfg.productId;
+  }
+  onProductChange();
+}
+
+function onProductChange() {
+  saveConfig({ productId: productSelect.value });
+  updateApplyState();
+}
+
+function updateApplyState() {
+  btnApply.disabled = !(supplierSelect.value && companySelect.value && productSelect.value);
+}
+
+supplierSelect.addEventListener('change', onSupplierChange);
+companySelect.addEventListener('change', onCompanyChange);
+productSelect.addEventListener('change', onProductChange);
+
+// ─── Anvend konfiguration: hent priser, beregn overhead ──────────────────────
+
+async function applyQuickConfig() {
+  const cfg = loadConfig();
+  if (!cfg.supplierId || !cfg.companyId || !cfg.productId || !cfg.priceArea) return;
+  qcStatus.style.display = 'block';
+  qcStatus.style.color = 'var(--muted)';
+  qcStatus.textContent = 'Henter prisbreakdown fra Strømligning...';
+
+  try {
+    const url = `${SL_BASE}/prices?supplier=${cfg.supplierId}&company=${cfg.companyId}&product=${cfg.productId}&priceArea=${cfg.priceArea}`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    const prices = data.prices || [];
+    if (!prices.length) throw new Error('tomt prissvar');
+
+    // Beregn gennemsnitlig overhead = total - electricity (alt undtagen rent spot/markedspris)
+    // value/total er kr/kWh; overhead = (total - electricity.total) i kr/kWh → øre/kWh × 100
+    let sumOverhead = 0, n = 0;
+    for (const p of prices) {
+      const total = p.price?.total ?? 0;
+      const elec  = p.details?.electricity?.total ?? 0;
+      sumOverhead += (total - elec);
+      n++;
+    }
+    const avgOverheadOere = n > 0 ? Math.round((sumOverhead / n) * 100) : null;
+
+    if (avgOverheadOere != null) {
+      document.getElementById('selfConsumpOverhead').value = avgOverheadOere;
+      saveConfig({ overheadOere: avgOverheadOere });
+      qcStatus.style.color = 'var(--green)';
+      qcStatus.innerHTML = `✓ Selvforbrugs-overhead sat til <strong>${avgOverheadOere} øre/kWh</strong> (gennemsnit over ${n} timer fra Strømligning).`;
+    } else {
+      qcStatus.style.color = 'var(--accent)';
+      qcStatus.textContent = 'Priser hentet, men kunne ikke beregne overhead — kontrollér manuelt.';
+    }
+  } catch (e) {
+    qcStatus.style.color = 'var(--red)';
+    qcStatus.textContent = `Fejl: ${e.message}`;
+  }
+}
+
+btnApply.addEventListener('click', applyQuickConfig);
+
+// ─── Pre-fyld ved page load ──────────────────────────────────────────────────
+
+(async () => {
+  const cfg = loadConfig();
+  if (cfg.address) {
+    addressInput.value = cfg.address;
+    addressHint.textContent = cfg.zip ? `Postnummer ${cfg.zip} — prisområde ${cfg.priceArea}` : '';
+  }
+  if (cfg.priceArea) document.getElementById('priceArea').value = cfg.priceArea;
+  if (cfg.overheadOere) document.getElementById('selfConsumpOverhead').value = cfg.overheadOere;
+  await populateCompanies();
+  if (cfg.priceArea) await populateSuppliers(cfg.priceArea);
+})();
 
 // ─── UI wiring ────────────────────────────────────────────────────────────────
 

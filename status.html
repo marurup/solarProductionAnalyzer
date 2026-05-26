@@ -54,6 +54,16 @@
   <a href="./">← Tilbage til analyse</a>
 </div>
 
+<!-- Gemt brugerkonfiguration -->
+<div class="card" id="configCard" style="display:none">
+  <h2>Gemt konfiguration</h2>
+  <p style="margin-bottom:14px">Adresse, netselskab og elaftale gemt lokalt — bruges til auto-udfyldning.</p>
+  <div id="configDetails"></div>
+  <div style="margin-top:14px">
+    <button class="btn danger" id="btnClearConfig">Glem konfiguration</button>
+  </div>
+</div>
+
 <!-- IndexedDB cache -->
 <div class="card">
   <h2>Lokal cache (din browser)</h2>
@@ -170,6 +180,38 @@ async function loadManifest() {
   }
 }
 
+// ─── Gemt brugerkonfiguration ────────────────────────────────────────────────
+const CONFIG_KEY = 'solar-analyzer-config-v1';
+function loadConfig() { try { return JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}'); } catch { return {}; } }
+function loadStoredConfig() {
+  const cfg = loadConfig();
+  if (!cfg.address && !cfg.supplierId && !cfg.companyId) return;
+  document.getElementById('configCard').style.display = 'block';
+
+  const fields = [
+    ['Adresse',            cfg.address || '—'],
+    ['Postnummer',         cfg.zip || '—'],
+    ['Prisområde',         cfg.priceArea || '—'],
+    ['Netselskab-ID',      cfg.supplierId || '—'],
+    ['Elselskab-ID',       cfg.companyId || '—'],
+    ['Elaftale-ID',        cfg.productId || '—'],
+    ['Selvforbrugs-overhead', cfg.overheadOere ? `${cfg.overheadOere} øre/kWh` : '—'],
+    ['Sidst opdateret',    cfg.savedAt ? new Date(cfg.savedAt).toLocaleString('da-DK') : '—'],
+  ];
+  document.getElementById('configDetails').innerHTML = `
+    <table style="width:100%; font-size:0.88rem;">
+      ${fields.map(([k, v]) => `<tr>
+        <td style="padding:4px 12px 4px 0; color:var(--muted); white-space:nowrap;">${k}</td>
+        <td style="padding:4px 0;">${v}</td>
+      </tr>`).join('')}
+    </table>`;
+}
+document.getElementById('btnClearConfig').addEventListener('click', () => {
+  if (!confirm('Slet din gemte adresse og el-konfiguration?')) return;
+  localStorage.removeItem(CONFIG_KEY);
+  document.getElementById('configCard').style.display = 'none';
+});
+
 // ─── Knapper ──────────────────────────────────────────────────────────────────
 document.getElementById('btnClearLocal').addEventListener('click', async () => {
   if (!confirm('Slet hele den lokale cache for alle prisområder?')) return;
@@ -183,6 +225,7 @@ document.getElementById('btnClearLocal').addEventListener('click', async () => {
   loadLocalCache();
 });
 
+loadStoredConfig();
 loadLocalCache();
 loadManifest();
 </script>
