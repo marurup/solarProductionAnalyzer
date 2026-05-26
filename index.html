@@ -343,9 +343,9 @@
       </select>
     </div>
     <div class="field">
-      <label>Selvforbrugs-overhead (fast del over spotpris)</label>
-      <input type="number" id="selfConsumpOverhead" value="185" min="0" max="400" step="5">
-      <span class="field-unit">øre/kWh — nettarif + elafgift + moms + leverandørtillæg</span>
+      <label>Tariff-overhead (alt over spot × 1,25)</label>
+      <input type="number" id="selfConsumpOverhead" value="55" min="0" max="400" step="1">
+      <span class="field-unit">øre/kWh m. moms — nettarif + elafgift + leverandørtillæg + Energinet-tariffer</span>
     </div>
   </div>
 
@@ -1139,7 +1139,9 @@ function analyze(exportRows, spotPrices, tariffs) {
     if (spotOere === undefined) { missingPrices++; continue; }
 
     const nettoEksportOere = spotOere - totalFradrag;
-    const selvforbrugVaerdi = spotOere + tariffs.selfConsumpOverhead; // øre/kWh
+    // Selvforbrugs-værdi: hvad du sparer ved at bruge kWh'en selv = consumer-prisen fra nettet
+    //   = spot × 1,25 (moms på spot) + tariff_overhead (alle øvrige omkostninger inkl. moms)
+    const selvforbrugVaerdi = spotOere * 1.25 + tariffs.selfConsumpOverhead;
     const tabtFortjenesteDKK = Math.max(0, (selvforbrugVaerdi - nettoEksportOere) * row.kwh / 100);
 
     results.push({
@@ -1526,89 +1528,83 @@ productSelect.addEventListener('change', onProductChange);
 
 async function applyQuickConfig() {
   const cfg = loadConfig();
-  if (!cfg.supplierId || !cfg.companyId || !cfg.productId || !cfg.priceArea) return;
+  if (!cfg.supplierId || !cfg.companyId || !cfg.productId) return;
   qcStatus.style.display = 'block';
   qcStatus.style.color = 'var(--muted)';
-  qcStatus.textContent = 'Henter prisbreakdown fra Strømligning...';
+  qcStatus.textContent = 'Henter omkostnings-breakdown fra Strømligning...';
 
   try {
-    // 1. Hent forbrugspriser fra Strømligning
-    const slUrl = `${SL_BASE}/prices?supplier=${cfg.supplierId}&customerGroup=c&company=${cfg.companyId}&product=${cfg.productId}&priceArea=${cfg.priceArea}`;
+    // Strømligning bruger camelCase params (productId/supplierId/customerGroupId) for at returnere
+    // distribution-tariffen separat i details.distribution. Med snake_case (supplier/product) bliver
+    // den lumpet ind i details.electricity og er ikke ekstraktbar.
+    const slUrl = `${SL_BASE}/prices?productId=${cfg.productId}&supplierId=${cfg.supplierId}&customerGroupId=c`;
     const slResp = await fetch(slUrl);
     if (!slResp.ok) throw new Error(`Strømligning: HTTP ${slResp.status}`);
     const slData = await slResp.json();
     const slPrices = slData.prices || [];
     if (!slPrices.length) throw new Error('Strømligning returnerede ingen priser');
 
-    const days = [...new Set(slPrices.map(p => p.localDate?.slice(0, 10)).filter(Boolean))].sort();
-    if (!days.length) throw new Error('Kunne ikke udlede datoer fra Strømligning-svar');
+    // Find dato-aktuel markup ("Tillæg til spotpris") fra /api/companies
+    const companies = await cachedJson('sl-companies', `${SL_BASE}/companies`);
+    const company = companies.find(c => c._id === cfg.companyId);
+    const product = company?.products?.find(p => p.id === cfg.productId);
+    const now = new Date();
+    const tillaeg = (product?.prices || []).find(pr => {
+      const name = (pr.name || '').toLowerCase();
+      if (!(name.includes('tillæg') || name.includes('tillaeg'))) return false;
+      if (pr.fromDate && new Date(pr.fromDate) > now) return false;
+      if (pr.toDate   && new Date(pr.toDate)   < now) return false;
+      return pr.enabled !== false;
+    });
+    const markupValueKr = tillaeg?.amount ?? 0;     // kr/kWh uden moms
+    const markupOereVat = markupValueKr * 1.25 * 100; // → øre/kWh med moms
 
-    // 2. Hent spot KUN fra lokal cache + statiske filer — undgå live EDS-kald (rate-limit på ~1/15min)
-    qcStatus.textContent = 'Slår spotpriser op i lokal cache...';
-    const cache = state.cache;
-    // Sørg for at relevante månedsfiler er læst ind i cache først
-    const months = [...new Set(days.map(d => d.slice(0,7)))];
-    for (const ym of months) await loadStaticMonth(cfg.priceArea, ym, cache, null);
-    const spotMap = await cache.getPrices(cfg.priceArea, days[0], days[days.length-1]);
-
-    // 3. Beregn overhead per time. Foretrækker præcis (total - spot), falder ellers tilbage til
-    //    approximation (total - electricity) som er "tariffer + elafgift inkl. moms".
-    let sumPrecise = 0, sumApprox = 0;
-    let sumTotal = 0, sumSpot = 0, sumElectricity = 0, sumElectricityTax = 0, sumVat = 0;
-    let nPrecise = 0, nApprox = 0;
-
+    // Sum cost-komponenter direkte fra Strømlignings strukturerede svar (alt med moms via .total)
+    // Vi rører IKKE 'electricity' (som indeholder spot+markup) eller 'price.total' (samme).
+    let sumDist = 0, sumSysT = 0, sumNetT = 0, sumElTax = 0, sumSurch = 0;
+    let n = 0;
     for (const p of slPrices) {
-      const hourKey = p.localDate?.slice(0, 13);
-      if (!hourKey) continue;
-
-      const totalOere       = (p.price?.total ?? 0) * 100;
-      const vatOere         = (p.price?.vat ?? 0) * 100;
-      const electricityOere = (p.details?.electricity?.total ?? 0) * 100;
-      const electricityVal  = (p.details?.electricity?.value ?? 0) * 100; // uden moms
-      const elTaxOere       = (p.details?.electricityTax?.total ?? 0) * 100;
-
-      sumTotal          += totalOere;
-      sumElectricity    += electricityOere;
-      sumElectricityTax += elTaxOere;
-      sumVat            += vatOere;
-      // Approximation = total - electricity.total (tariffer+elafgift med moms, mangler kun moms-på-spot)
-      sumApprox += totalOere - electricityOere;
-      nApprox++;
-
-      const spotOere = spotMap.get(hourKey);
-      if (spotOere != null) {
-        sumPrecise += totalOere - spotOere;
-        sumSpot    += spotOere;
-        nPrecise++;
-      }
+      const det = p.details || {};
+      sumDist  += (det.distribution?.total ?? 0) * 100;
+      sumSysT  += (det.transmission?.systemTariff?.total ?? 0) * 100;
+      sumNetT  += (det.transmission?.netTariff?.total    ?? 0) * 100;
+      sumElTax += (det.electricityTax?.total ?? 0) * 100;
+      sumSurch += (det.surcharge?.total ?? 0) * 100;
+      n++;
     }
+    if (n === 0) throw new Error('Ingen brugbare data fra Strømligning');
 
-    if (nApprox === 0) throw new Error('Ingen brugbare timer i Strømligning-svar');
+    const avgDist  = sumDist  / n;
+    const avgSysT  = sumSysT  / n;
+    const avgNetT  = sumNetT  / n;
+    const avgElTax = sumElTax / n;
+    const avgSurch = sumSurch / n;
 
-    const isPrecise = nPrecise > 0;
-    const avgOverhead = Math.round(isPrecise ? sumPrecise / nPrecise : sumApprox / nApprox);
+    // Tariff-overhead = alle ikke-spot komponenter, med moms
+    const avgOverhead = Math.round(avgDist + avgSysT + avgNetT + avgElTax + avgSurch + markupOereVat);
+
+    const days = [...new Set(slPrices.map(p => p.localDate?.slice(0,10)).filter(Boolean))].sort();
     const breakdown = {
-      mode: isPrecise ? 'precise' : 'approximation',
-      n:                 isPrecise ? nPrecise : nApprox,
-      missingSpot:       nApprox - nPrecise,
-      period:            `${days[0]} → ${days[days.length-1]}`,
-      avgSpotOere:       isPrecise ? sumSpot / nPrecise : null,
-      avgTotalOere:      sumTotal / nApprox,
-      avgOverheadOere:   avgOverhead,
-      avgElectricityOere: sumElectricity / nApprox,
-      avgElectricityTaxOere: sumElectricityTax / nApprox,
-      avgVatOere:        sumVat / nApprox,
-      computedAt:        new Date().toISOString(),
+      n,
+      period: `${days[0]} → ${days[days.length-1]}`,
+      productName: product?.name || cfg.productId,
+      avgDistributionOere:   avgDist,
+      avgSystemTariffOere:   avgSysT,
+      avgNetTariffOere:      avgNetT,
+      avgElectricityTaxOere: avgElTax,
+      avgSurchargeOere:      avgSurch,
+      markupOereVat,
+      markupValueKr,
+      tillaegName: tillaeg?.name || null,
+      avgOverheadOere: avgOverhead,
+      computedAt: new Date().toISOString(),
     };
 
     document.getElementById('selfConsumpOverhead').value = avgOverhead;
     saveConfig({ overheadOere: avgOverhead, overheadBreakdown: breakdown });
-    updateCacheStatus(''); // ryd evt. resterende "Henter..."-tekst
 
-    qcStatus.style.color = isPrecise ? 'var(--green)' : 'var(--accent)';
-    qcStatus.innerHTML = isPrecise
-      ? `✓ Overhead sat til <strong>${avgOverhead} øre/kWh</strong> (præcis, ${nPrecise} timer med spot fra cache). <a href="#" id="qcShowDetails" style="color:var(--accent)">Vis udregning</a>`
-      : `⚠ Overhead sat til <strong>${avgOverhead} øre/kWh</strong> (approximation — ingen spot i cache endnu for de timer Strømligning leverede). <a href="#" id="qcShowDetails" style="color:var(--accent)">Vis udregning</a>`;
+    qcStatus.style.color = 'var(--green)';
+    qcStatus.innerHTML = `✓ Tariff-overhead sat til <strong>${avgOverhead} øre/kWh</strong> (sum af komponenter over ${n} kvartérer). <a href="#" id="qcShowDetails" style="color:var(--accent)">Vis udregning</a>`;
     document.getElementById('qcShowDetails').addEventListener('click', e => {
       e.preventDefault();
       const det = document.getElementById('overheadDetails');
@@ -1619,7 +1615,6 @@ async function applyQuickConfig() {
   } catch (e) {
     qcStatus.style.color = 'var(--red)';
     qcStatus.textContent = `Fejl: ${e.message}`;
-    updateCacheStatus('');
   }
 }
 
@@ -1630,47 +1625,32 @@ function renderOverheadBreakdown() {
   if (!det || !b) return;
 
   const fmt = v => (v == null ? '—' : v.toFixed(2).replace('.', ',') + ' øre/kWh');
-  const avgOther = b.avgTotalOere - b.avgElectricityOere - b.avgElectricityTaxOere;
-  const isApprox = b.mode === 'approximation';
-
-  const formulaHtml = isApprox
-    ? `<strong>Formlen (approximation):</strong> overhead = <em>strømligning.total − strømligning.electricity.total</em>.<br>
-       Spot var ikke i lokal cache for denne periode — derfor bruger vi Strømlignings egen breakdown.
-       Dette giver "tariffer + elafgift inkl. moms" men <em>mangler moms på selve spotprisen</em>
-       (typisk 10-15 øre ekstra). Kør analysen først for at fylde cachen og få præcis udregning.`
-    : `<strong>Formlen:</strong> overhead = <em>strømligning.total − vores_spot</em>, gennemsnit over hver time.<br>
-       Det betyder "alt det du ville have betalt udover spotprisen, hvis du i stedet købte den kWh fra nettet" — nettarif, elafgift, leverandørtillæg, og moms på alt.`;
-
-  const spotRow = b.avgSpotOere != null
-    ? `<tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Vores spot (EDS, uden moms)</td><td>${fmt(b.avgSpotOere)}</td></tr>`
-    : `<tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Vores spot</td><td style="color:var(--accent)">— ikke i cache —</td></tr>`;
-
-  const lastRow = isApprox
-    ? `<tr><td colspan="2" style="padding:10px 0 6px 0; border-top:1px solid var(--border); color:var(--accent); font-weight:600;">
-         Overhead ≈ total − electricity = <strong>${fmt(b.avgOverheadOere)}</strong>
-       </td></tr>`
-    : `<tr><td colspan="2" style="padding:10px 0 6px 0; border-top:1px solid var(--border); color:var(--accent); font-weight:600;">
-         Overhead = total − spot = <strong>${fmt(b.avgOverheadOere)}</strong>
-       </td></tr>`;
+  const sumStatic = (b.avgSystemTariffOere + b.avgNetTariffOere + b.avgElectricityTaxOere + b.avgSurchargeOere + b.markupOereVat);
 
   document.getElementById('overheadBreakdown').innerHTML = `
-    <p style="font-size:0.83rem; line-height:1.6; margin-bottom:10px;">${formulaHtml}</p>
+    <p style="font-size:0.83rem; line-height:1.6; margin-bottom:10px;">
+      <strong>Tariff-overhead</strong> = summen af de omkostninger der ligger ovenpå spotprisen, alle med moms.
+      Hentet direkte fra Strømlignings strukturerede breakdown (uden at røre spot — den kommer fra EDS).<br>
+      I analysen: <em>selvforbrugsværdi(t) = spot(t) × 1,25 + tariff-overhead</em>
+    </p>
     <table style="width:100%; font-size:0.85rem; border-collapse:collapse;">
-      <tr><td colspan="2" style="padding:6px 0; color:var(--muted); font-size:0.78rem;">PERIODE OG DÆKNING</td></tr>
+      <tr><td colspan="2" style="padding:6px 0; color:var(--muted); font-size:0.78rem;">PERIODE OG OPSLAG</td></tr>
       <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Periode</td><td>${b.period}</td></tr>
-      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Timer brugt</td><td>${b.n}${b.missingSpot ? ` (${b.missingSpot} timer manglede spot)` : ''}</td></tr>
-      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Tilstand</td><td>${isApprox ? '<span style="color:var(--accent)">approximation</span>' : '<span style="color:var(--green)">præcis</span>'}</td></tr>
-      <tr><td colspan="2" style="padding:10px 0 6px; color:var(--muted); font-size:0.78rem;">GENNEMSNIT PR. TIME</td></tr>
-      ${spotRow}
-      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Strømligning total (med moms)</td><td>${fmt(b.avgTotalOere)}</td></tr>
-      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">→ Heraf moms (25%)</td><td>${fmt(b.avgVatOere)}</td></tr>
-      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">→ Heraf electricity (spot+leverandør+moms)</td><td>${fmt(b.avgElectricityOere)}</td></tr>
-      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">→ Heraf elafgift (med moms)</td><td>${fmt(b.avgElectricityTaxOere)}</td></tr>
-      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">→ Heraf andet (transport, distribution m.m.)</td><td>${fmt(avgOther)}</td></tr>
-      ${lastRow}
+      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Datapunkter (kvartérer)</td><td>${b.n}</td></tr>
+      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Produkt</td><td>${b.productName || '—'}</td></tr>
+      <tr><td colspan="2" style="padding:12px 0 6px; color:var(--muted); font-size:0.78rem;">KOMPONENTER (GNS. ØRE/kWh MED MOMS)</td></tr>
+      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Energinet systemtarif</td><td>${fmt(b.avgSystemTariffOere)}</td></tr>
+      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Energinet nettarif (transmission)</td><td>${fmt(b.avgNetTariffOere)}</td></tr>
+      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Netselskab distribution (tidsvarierende, gns.)</td><td>${fmt(b.avgDistributionOere)}</td></tr>
+      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Elafgift</td><td>${fmt(b.avgElectricityTaxOere)}</td></tr>
+      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Tillæg / surcharge</td><td>${fmt(b.avgSurchargeOere)}</td></tr>
+      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Leverandørtillæg ${b.tillaegName ? `(${b.tillaegName})` : ''}</td><td>${fmt(b.markupOereVat)}</td></tr>
+      <tr><td colspan="2" style="padding:10px 0 6px 0; border-top:1px solid var(--border); color:var(--accent); font-weight:600;">
+        Tariff-overhead = <strong>${fmt(b.avgOverheadOere)}</strong>
+      </td></tr>
     </table>
     <p style="font-size:0.78rem; color:var(--muted); margin-top:10px;">
-      Beregnet ${new Date(b.computedAt).toLocaleString('da-DK')}. Tariffer er stort set statiske — kun nettariffen varierer let med time-på-døgnet, men gennemsnittet over flere døgn er en god approximation.
+      Beregnet ${new Date(b.computedAt).toLocaleString('da-DK')}. Distribution varierer per time-på-døgnet (lavlast/højlast/spidslast) — vi bruger gennemsnittet over Strømligning's leverede kvartérer. Faste komponenter (Energinet, elafgift, markup) ændres typisk kun årligt.
     </p>
   `;
   det.style.display = 'block';
