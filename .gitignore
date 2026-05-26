@@ -1,0 +1,16 @@
+# Claude Code local settings
+.claude/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/
+
+# Node (hvis vi senere tilføjer deps)
+node_modules/
+npm-debug.log*
+
+# Lokal scratch
+/tmp/

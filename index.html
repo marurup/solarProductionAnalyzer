@@ -1,0 +1,1514 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Solcelle Eksport-Analyse</title>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --border: #2a2d3a;
+      --text: #e2e4ed;
+      --muted: #6b7280;
+      --accent: #f59e0b;
+      --green: #22c55e;
+      --red: #ef4444;
+      --blue: #3b82f6;
+    }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 15px;
+      line-height: 1.5;
+      padding: 24px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    h1 { font-size: 1.6rem; font-weight: 700; margin-bottom: 4px; }
+    h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 16px; color: var(--accent); }
+    h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    p { color: var(--muted); font-size: 0.9rem; }
+    .subtitle { color: var(--muted); margin-bottom: 32px; }
+
+    /* Cards */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 24px;
+      margin-bottom: 20px;
+    }
+
+    /* Steps */
+    .steps { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+    @media (max-width: 700px) { .steps { grid-template-columns: 1fr; } }
+    .step { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 0.85rem; }
+    .step.active { color: var(--text); }
+    .step-num {
+      width: 26px; height: 26px; border-radius: 50%;
+      background: var(--border); display: flex; align-items: center; justify-content: center;
+      font-size: 0.8rem; font-weight: 700; flex-shrink: 0;
+    }
+    .step.active .step-num { background: var(--accent); color: #000; }
+    .step.done .step-num { background: var(--green); color: #000; }
+
+    /* Upload zones */
+    .upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 600px) { .upload-grid { grid-template-columns: 1fr; } }
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: 8px;
+      padding: 28px 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      position: relative;
+    }
+    .drop-zone:hover, .drop-zone.drag-over { border-color: var(--accent); background: rgba(245,158,11,0.05); }
+    .drop-zone.loaded { border-color: var(--green); border-style: solid; }
+    .drop-zone input[type=file] { display: none; }
+    .drop-icon { font-size: 2rem; margin-bottom: 8px; }
+    .drop-label { font-size: 0.9rem; font-weight: 500; margin-bottom: 4px; }
+    .drop-hint { font-size: 0.78rem; color: var(--muted); }
+    .drop-status { font-size: 0.82rem; color: var(--green); margin-top: 8px; font-weight: 500; }
+
+    /* Tariff config */
+    .tariff-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 600px) { .tariff-grid { grid-template-columns: 1fr; } }
+    .field { display: flex; flex-direction: column; gap: 4px; }
+    .field label { font-size: 0.82rem; color: var(--muted); }
+    .field input[type=number] {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      color: var(--text);
+      font-size: 0.95rem;
+      width: 100%;
+    }
+    .field input:focus { outline: none; border-color: var(--accent); }
+    .field-unit { font-size: 0.75rem; color: var(--muted); }
+
+    /* Selects */
+    select {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      color: var(--text);
+      font-size: 0.9rem;
+    }
+    select:focus { outline: none; border-color: var(--accent); }
+
+    /* Checkbox row */
+    .check-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+    .check-row input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+    .check-row label { font-size: 0.9rem; cursor: pointer; }
+
+    /* Buttons */
+    .btn {
+      background: var(--accent);
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 24px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn:not(:disabled):hover { opacity: 0.85; }
+    .btn-secondary {
+      background: var(--border);
+      color: var(--text);
+    }
+
+    /* Progress / status */
+    .status-bar {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 0.85rem; color: var(--muted);
+      padding: 10px 0;
+    }
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Results */
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .kpi {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .kpi-label { font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+    .kpi-value { font-size: 1.5rem; font-weight: 700; }
+    .kpi-value.red { color: var(--red); }
+    .kpi-value.green { color: var(--green); }
+    .kpi-value.amber { color: var(--accent); }
+
+    /* Table */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; cursor: pointer; user-select: none; }
+    th:hover { color: var(--text); }
+    td { padding: 7px 12px; border-bottom: 1px solid rgba(42,45,58,0.5); white-space: nowrap; }
+    tr:last-child td { border-bottom: none; }
+    tr.bad td:first-child { border-left: 3px solid var(--red); }
+    tr.warn td:first-child { border-left: 3px solid var(--accent); }
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 4px;
+      font-size: 0.75rem; font-weight: 600;
+    }
+    .badge.red { background: rgba(239,68,68,0.15); color: var(--red); }
+    .badge.amber { background: rgba(245,158,11,0.15); color: var(--accent); }
+    .badge.green { background: rgba(34,197,94,0.15); color: var(--green); }
+
+    /* Debug log */
+    .debug-log {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      font-family: monospace;
+      font-size: 0.78rem;
+      color: var(--muted);
+      max-height: 200px;
+      overflow-y: auto;
+      margin-top: 12px;
+    }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
+    .tab { padding: 8px 16px; cursor: pointer; font-size: 0.9rem; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    #results { display: none; }
+    .row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+    .spacer { flex: 1; }
+
+    /* Lightbox */
+    #lightbox {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.88); z-index: 1000;
+      align-items: center; justify-content: center; cursor: zoom-out;
+    }
+    #lightbox.open { display: flex; }
+    #lightbox img { max-width: 92vw; max-height: 92vh; border-radius: 10px; box-shadow: 0 8px 48px rgba(0,0,0,0.7); }
+  </style>
+</head>
+<body>
+
+<h1>☀️ Solcelle Eksport-Analyse</h1>
+<p class="subtitle">Find timer hvor du solgte strøm til lav pris — og hvad selvforbrug ville have givet i stedet.</p>
+
+<!-- Progress steps -->
+<div class="steps" id="stepIndicator">
+  <div class="step active" id="step1"><div class="step-num">1</div> Upload data fra eloverblik</div>
+  <div class="step" id="step2"><div class="step-num">2</div> Konfigurer tariffer</div>
+  <div class="step" id="step3"><div class="step-num">3</div> Se analyse</div>
+</div>
+
+<!-- STEP 1: Upload -->
+<div class="card" id="section-upload">
+  <h2>1. Upload data fra eloverblik.dk</h2>
+
+  <details id="guideDetails" style="margin-bottom:18px; background:var(--bg); border:1px solid var(--border); border-radius:8px; overflow:hidden;">
+    <summary style="cursor:pointer; padding:12px 16px; font-size:0.9rem; font-weight:600; color:var(--accent); user-select:none; list-style:none; display:flex; align-items:center; gap:8px;">
+      <span id="guideArrow" style="font-size:0.75rem; transition:transform 0.2s;">▶</span>
+      Vejledning: Sådan henter du data fra eloverblik.dk
+    </summary>
+    <div style="padding:0 16px 16px; display:grid; grid-template-columns:1fr auto; gap:20px; align-items:start;">
+      <div>
+        <ol style="font-size:0.875rem; color:var(--muted); line-height:2; padding-left:1.3em; margin-top:12px;">
+          <li>Log ind på <strong style="color:var(--text)">eloverblik.dk</strong></li>
+          <li>Klik på <strong style="color:var(--text)">Handlinger → Download data</strong></li>
+          <li>Vælg <strong style="color:var(--text)">Forbrug/produktion</strong> og angiv datointerval</li>
+          <li>Sæt <strong style="color:var(--text)">Tidsopløsning</strong> til <strong style="color:var(--text)">Kvarter</strong></li>
+          <li>Sæt <strong style="color:var(--text)">Format</strong> til <strong style="color:var(--text)">CSV</strong></li>
+          <li>Klik <strong style="color:var(--text)">Download</strong></li>
+        </ol>
+        <p style="font-size:0.82rem; margin-top:10px; padding:8px 12px; background:rgba(34,197,94,0.08); border:1px solid rgba(34,197,94,0.2); border-radius:6px;">
+          Du får én fil med både forbrug og eksport — upload den nedenfor, og appen finder de rigtige data automatisk.
+        </p>
+      </div>
+      <img src="images/eloverblik_download_guide.png" alt="eloverblik Download-dialog"
+           onclick="openLightbox(this.src)"
+           style="width:160px; border-radius:8px; border:1px solid var(--border); margin-top:12px; flex-shrink:0; cursor:zoom-in;" title="Klik for at forstørre">
+    </div>
+  </details>
+
+  <div class="upload-grid">
+    <div class="drop-zone" id="dropExport" onclick="document.getElementById('fileExport').click()">
+      <div class="drop-icon">📄</div>
+      <div class="drop-label">Forbrug/Produktion CSV</div>
+      <div class="drop-hint">Fra eloverblik.dk — appen finder eksport og forbrug automatisk</div>
+      <div class="drop-status" id="statusExport" style="display:none"></div>
+      <input type="file" id="fileExport" accept=".csv,.txt">
+    </div>
+
+    <div class="drop-zone" id="dropForbrug" onclick="document.getElementById('fileForbrug').click()">
+      <div class="drop-icon">🏠</div>
+      <div class="drop-label">Separat forbrugsfil (valgfrit)</div>
+      <div class="drop-hint">Kun nødvendig hvis du har to separate CSV-filer</div>
+      <div class="drop-status" id="statusForbrug" style="display:none"></div>
+      <input type="file" id="fileForbrug" accept=".csv,.txt">
+    </div>
+  </div>
+
+  <div id="meterSelector" style="display:none; margin-top:16px; padding:14px 16px; background:rgba(245,158,11,0.07); border:1px solid var(--accent); border-radius:8px;">
+    <p style="font-size:0.88rem; color:var(--accent); font-weight:600; margin-bottom:6px;">Flere målepunkter fundet</p>
+    <p style="font-size:0.83rem; color:var(--muted); margin-bottom:12px;">Filen indeholder data fra <strong id="meterCount" style="color:var(--text)"></strong> målepunkter. Vælg det målepunkt der svarer til din solcelleproduktion/eksport:</p>
+    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+      <select id="meterIdSelect" style="flex:1; min-width:220px;"></select>
+      <button class="btn" id="btnSelectMeter">Bekræft valg</button>
+    </div>
+    <p id="meterHint" style="font-size:0.78rem; color:var(--muted); margin-top:6px;"></p>
+  </div>
+
+  <div class="debug-log" id="parseLog">Afventer CSV-filer...</div>
+</div>
+
+<!-- STEP 2: Tariff config -->
+<div class="card" id="section-config">
+  <h2>2. Konfigurer tariffer og priser</h2>
+
+  <div class="row" style="margin-bottom:16px; gap:20px;">
+    <div class="field">
+      <label>Prisområde</label>
+      <select id="priceArea">
+        <option value="DK2">DK2 (Sjælland, Fyn, Bornholm)</option>
+        <option value="DK1">DK1 (Jylland, Fyn)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Selvforbrugs-overhead (fast del over spotpris)</label>
+      <input type="number" id="selfConsumpOverhead" value="185" min="0" max="400" step="5">
+      <span class="field-unit">øre/kWh — nettarif + elafgift + moms + leverandørtillæg</span>
+    </div>
+  </div>
+
+  <h3>Fradrag på eksportpris</h3>
+  <div class="tariff-grid" style="margin-bottom:12px;">
+    <div class="field">
+      <label>Energinets balancetarif</label>
+      <input type="number" id="t1" value="0.65" min="0" max="10" step="0.01">
+      <span class="field-unit">øre/kWh</span>
+    </div>
+    <div class="field">
+      <label>Energinets indfødningstarif</label>
+      <input type="number" id="t2" value="0.50" min="0" max="10" step="0.01">
+      <span class="field-unit">øre/kWh</span>
+    </div>
+    <div class="field">
+      <label>Netselskabets indfødningstarif</label>
+      <input type="number" id="t3" value="0.47" min="0" max="20" step="0.01">
+      <span class="field-unit">øre/kWh (Radius: 0,47 — andet netselskab: tjek dit tillægsblad)</span>
+    </div>
+    <div class="field">
+      <label>Leverandørens balancetarif / gebyr</label>
+      <input type="number" id="t4" value="3.00" min="0" max="20" step="0.01">
+      <span class="field-unit">øre/kWh (Andel Energi: 3,00)</span>
+    </div>
+  </div>
+
+  <div class="check-row">
+    <input type="checkbox" id="aftagepligt">
+    <label for="aftagepligt">Mit anlæg er fritaget for indfødningstariffer (aftagepligt — typisk installeret før 2023). Netselskabets indfødningstarif sættes til 0.</label>
+  </div>
+
+  <div style="margin-top: 8px; padding: 10px 14px; background: var(--bg); border-radius: 6px; font-size: 0.85rem; color: var(--muted);">
+    Samlet fradrag: <strong id="totalFradrag" style="color: var(--text);">4,62</strong> øre/kWh
+  </div>
+
+  <h3 style="margin-top: 20px;">Grænseværdier</h3>
+  <div class="tariff-grid">
+    <div class="field">
+      <label>"Dårlig" eksporttime — under denne nettopris</label>
+      <input type="number" id="badThreshold" value="10" min="-100" max="100" step="1">
+      <span class="field-unit">øre/kWh netto (inkl. negative priser)</span>
+    </div>
+    <div class="field">
+      <label>"Advarsel" — gul markering under</label>
+      <input type="number" id="warnThreshold" value="25" min="0" max="200" step="1">
+      <span class="field-unit">øre/kWh netto</span>
+    </div>
+  </div>
+
+  <div style="margin-top: 20px; display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+    <button class="btn" id="btnAnalyze" disabled>Hent spotpriser og analyser</button>
+    <button class="btn" id="btnStop" style="display:none; background:var(--red); color:#fff;">Stop</button>
+    <button class="btn btn-secondary" id="btnClearCache" style="font-size:0.82rem; padding:8px 16px;">Ryd cache</button>
+    <span id="cacheStatus" style="font-size:0.82rem; color:var(--muted);">Indlæser cache...</span>
+  </div>
+
+  <div class="status-bar" id="analyzeStatus" style="display:none">
+    <div class="spinner"></div>
+    <span id="analyzeStatusText">Henter spotpriser fra Energi Data Service...</span>
+  </div>
+</div>
+
+<!-- STEP 3: Results -->
+<div id="results">
+  <div class="card">
+    <h2>3. Analyse-resultater</h2>
+    <div class="kpi-grid" id="kpiGrid"></div>
+  </div>
+
+  <div class="card">
+    <div class="tabs">
+      <div class="tab active" data-tab="bad">Problematiske timer</div>
+      <div class="tab" data-tab="monthly">Månedsoversigt</div>
+      <div class="tab" data-tab="debug">Parser-log</div>
+    </div>
+
+    <div class="tab-content active" id="tab-bad">
+      <div class="row" style="margin-bottom: 12px;">
+        <span style="font-size:0.85rem; color:var(--muted)">
+          Timer med netto eksportpris under grænseværdien — sorteret efter størst tabt fortjeneste.
+        </span>
+        <div class="spacer"></div>
+        <button class="btn btn-secondary" id="btnExportCSV" style="font-size:0.82rem; padding:6px 14px;">Eksporter CSV</button>
+      </div>
+      <div class="table-wrap">
+        <table id="badHoursTable">
+          <thead>
+            <tr>
+              <th onclick="sortTable('timestamp')">Dato/tid ▲</th>
+              <th onclick="sortTable('kwh')">kWh eksporteret</th>
+              <th onclick="sortTable('spotOere')">Spotpris (øre)</th>
+              <th onclick="sortTable('nettoEksportOere')">Netto eksport (øre)</th>
+              <th onclick="sortTable('selvforbrugVaerdi')">Selvforbrugsværdi (øre)</th>
+              <th onclick="sortTable('tabtFortjenesteDKK')">Tabt (kr)</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="badHoursBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="tab-content" id="tab-monthly">
+      <div class="table-wrap">
+        <table id="monthlyTable">
+          <thead>
+            <tr>
+              <th>Måned</th>
+              <th>kWh eksporteret</th>
+              <th>Indtægt (kr)</th>
+              <th>Gns. netto-pris (øre/kWh)</th>
+              <th>Dårlige timer</th>
+              <th>Tabt fortjeneste (kr)</th>
+            </tr>
+          </thead>
+          <tbody id="monthlyBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="tab-content" id="tab-debug">
+      <div class="debug-log" id="debugLog" style="max-height:400px;"></div>
+    </div>
+  </div>
+</div>
+
+<div id="lightbox"><img id="lightboxImg" src="" alt="Forstørret billede"></div>
+
+<script>
+// ─── IndexedDB Cache ──────────────────────────────────────────────────────────
+
+class SpotPriceCache {
+  constructor() {
+    this.db = null;
+  }
+
+  open() {
+    if (this.db) return Promise.resolve(this.db);
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open('solar-analyzer', 1);
+      req.onupgradeneeded = e => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('spot-prices'))
+          db.createObjectStore('spot-prices', { keyPath: 'key' });
+        if (!db.objectStoreNames.contains('cached-days'))
+          db.createObjectStore('cached-days', { keyPath: 'key' });
+      };
+      req.onsuccess = e => { this.db = e.target.result; resolve(this.db); };
+      req.onerror = e => reject(e.target.error);
+    });
+  }
+
+  // Returns which days in [startDay, endDay] are NOT yet in cache for priceArea
+  async getMissingDays(priceArea, startDay, endDay) {
+    await this.open();
+    const allDays = getDaysInRange(startDay, endDay);
+    if (!allDays.length) return [];
+    return new Promise((resolve, reject) => {
+      const tx = this.db.transaction('cached-days', 'readonly');
+      const store = tx.objectStore('cached-days');
+      const lower = `${priceArea}-${allDays[0]}`;
+      const upper = `${priceArea}-${allDays[allDays.length - 1]}`;
+      const req = store.getAllKeys(IDBKeyRange.bound(lower, upper));
+      req.onsuccess = () => {
+        const present = new Set(req.result.map(k => k.slice(priceArea.length + 1)));
+        resolve(allDays.filter(d => !present.has(d)));
+      };
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  // Read all cached prices for a range — returns Map<"YYYY-MM-DDTHH", øre/kWh>
+  async getPrices(priceArea, startDay, endDay) {
+    await this.open();
+    const lower = `${priceArea}-${startDay}T00`;
+    const upper = `${priceArea}-${endDay}T23`;
+    return new Promise((resolve, reject) => {
+      const tx = this.db.transaction('spot-prices', 'readonly');
+      const req = tx.objectStore('spot-prices').getAll(IDBKeyRange.bound(lower, upper));
+      req.onsuccess = () => {
+        const map = new Map();
+        for (const r of req.result) {
+          map.set(r.key.slice(priceArea.length + 1), r.spotOere);
+        }
+        resolve(map);
+      };
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  // Store one day's price records + mark day as cached
+  async storeDayPrices(priceArea, day, records) {
+    await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = this.db.transaction(['spot-prices', 'cached-days'], 'readwrite');
+      const priceStore = tx.objectStore('spot-prices');
+      const dayStore = tx.objectStore('cached-days');
+      for (const r of records) {
+        priceStore.put({ key: `${priceArea}-${r.hourKey}`, spotOere: r.spotOere });
+      }
+      dayStore.put({ key: `${priceArea}-${day}`, fetchedAt: new Date().toISOString() });
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  async getDayCount(priceArea) {
+    await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = this.db.transaction('cached-days', 'readonly');
+      const req = tx.objectStore('cached-days').count(
+        IDBKeyRange.bound(`${priceArea}-`, `${priceArea}-￿`)
+      );
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async clear() {
+    await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = this.db.transaction(['spot-prices', 'cached-days'], 'readwrite');
+      tx.objectStore('spot-prices').clear();
+      tx.objectStore('cached-days').clear();
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+}
+
+// Accepts "YYYY-MM-DD" strings. Uses UTC noon to avoid DST edge cases in day iteration.
+function getDaysInRange(startDay, endDay) {
+  const days = [];
+  const cur = new Date(`${startDay}T12:00:00Z`);
+  const end = new Date(`${endDay}T12:00:00Z`);
+  while (cur <= end) {
+    const y = cur.getUTCFullYear();
+    const m = String(cur.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(cur.getUTCDate()).padStart(2, '0');
+    days.push(`${y}-${m}-${d}`);
+    cur.setUTCDate(cur.getUTCDate() + 1);
+  }
+  return days;
+}
+
+// Group sorted day strings into contiguous date ranges to minimise API calls
+function groupDaysIntoRanges(days) {
+  if (!days.length) return [];
+  const sorted = [...days].sort();
+  const ranges = [];
+  let rangeStart = sorted[0];
+  let prev = sorted[0];
+  for (let i = 1; i < sorted.length; i++) {
+    const gap = (new Date(sorted[i]) - new Date(prev)) / 86400000;
+    if (gap > 1) { ranges.push([rangeStart, prev]); rangeStart = sorted[i]; }
+    prev = sorted[i];
+  }
+  ranges.push([rangeStart, prev]);
+  return ranges;
+}
+
+// ─── State ────────────────────────────────────────────────────────────────────
+const state = {
+  exportRows: null,   // [{timestamp: Date, kwh: number}]
+  forbrugRows: null,  // [{timestamp: Date, kwh: number}] (optional)
+  spotPrices: null,   // Map<string, number>  "YYYY-MM-DDTHH" => øre/kWh
+  analysisData: null, // full analysis result array
+  sortCol: 'tabtFortjenesteDKK',
+  sortDir: -1,
+  cache: new SpotPriceCache(),
+  abortController: null,
+};
+
+const log = (() => {
+  const el = () => document.getElementById('parseLog');
+  const dl = () => document.getElementById('debugLog');
+  return {
+    info: (msg) => { const t = `[INFO] ${msg}`; console.log(t); el().textContent += t + '\n'; dl().textContent += t + '\n'; },
+    warn: (msg) => { const t = `[WARN] ${msg}`; console.warn(t); el().textContent += t + '\n'; dl().textContent += t + '\n'; },
+    error: (msg) => { const t = `[ERR] ${msg}`; console.error(t); el().textContent += t + '\n'; dl().textContent += t + '\n'; },
+  };
+})();
+
+function updateCacheStatus(msg) {
+  document.getElementById('cacheStatus').textContent = msg;
+}
+
+// ─── CSV Parsing ──────────────────────────────────────────────────────────────
+
+function parseEloverblikCSV(text, label) {
+  log.info(`Parsing ${label}...`);
+
+  // Detect separator
+  const firstLine = text.split('\n')[0];
+  const sep = firstLine.includes(';') ? ';' : ',';
+  log.info(`Separator: "${sep}"`);
+
+  const result = Papa.parse(text, {
+    delimiter: sep,
+    header: true,
+    skipEmptyLines: true,
+    transformHeader: h => h.trim().replace(/^["']|["']$/g, '').toLowerCase(),
+  });
+
+  if (result.errors.length) {
+    result.errors.forEach(e => log.warn(`CSV parse warning: ${e.message} (row ${e.row})`));
+  }
+
+  log.info(`${label}: ${result.data.length} rækker. Kolonner: ${Object.keys(result.data[0] || {}).join(', ')}`);
+
+  // Find timestamp and value columns
+  const headers = Object.keys(result.data[0] || {});
+  const tsCol = findColumn(headers, ['fra', 'from', 'dato', 'tidspunkt', 'time', 'datetime', 'start']);
+  const kwhCol = findColumn(headers, ['mængde', 'maengde', 'kwh', 'value', 'amount', 'quantity', 'forbrug', 'produktion', 'eksport']);
+  const meterIdCol       = findColumn(headers, ['målepunktsid', 'malepunktsid', 'maalepunktsid', 'meterid', 'meterpoint']);
+  const typeCol          = findColumn(headers, ['type', 'målingstype', 'metertype']);
+  const meterTypeCodeCol = findColumn(headers, ['målepunktstype_kode', 'maalepunktstype_kode', 'typekode', 'metertype_kode']);
+
+  if (!tsCol || !kwhCol) {
+    log.error(`Kunne ikke finde kolonner. Fundne kolonner: ${headers.join(', ')}`);
+    log.error('Forventet: en timestamps-kolonne ("Fra", "Dato") og en mængde-kolonne ("Mængde", "kWh")');
+    return null;
+  }
+
+  log.info(`${label}: bruger "${tsCol}" som tid, "${kwhCol}" som kWh${meterIdCol ? `, "${meterIdCol}" som målepunkt` : ''}${meterTypeCodeCol ? `, "${meterTypeCodeCol}" som typekode` : typeCol ? `, "${typeCol}" som type` : ''}`);
+
+  const rows = [];
+  let skipped = 0;
+  let resolution = null; // 'hour' or 'quarter'
+
+  for (const row of result.data) {
+    const tsRaw = (row[tsCol] || '').trim().replace(/^["']|["']$/g, '');
+    const kwhRaw = (row[kwhCol] || '').trim().replace(/^["']|["']$/g, '').replace(',', '.');
+    const meterId       = meterIdCol       ? (row[meterIdCol]       || '').trim() : null;
+    const type          = typeCol          ? (row[typeCol]          || '').trim() : null;
+    const meterTypeCode = meterTypeCodeCol ? (row[meterTypeCodeCol] || '').trim() : null;
+
+    const hourKey = rawToHourKey(tsRaw); // derived from string, no timezone involved
+    const ts = parseTimestamp(tsRaw);    // Date object only used for sorting/display
+    const kwh = parseFloat(kwhRaw);
+
+    if (!hourKey || !ts || isNaN(kwh)) { skipped++; continue; }
+
+    // Detect resolution from first two consecutive rows from the same meter
+    if (!resolution && rows.length >= 1) {
+      const prev = rows[rows.length - 1];
+      if (!meterIdCol || prev.meterId === meterId) {
+        const diff = (ts - prev.timestamp) / 60000; // minutes
+        resolution = diff <= 15 ? 'quarter' : 'hour';
+        log.info(`${label}: detekteret opløsning = ${resolution} (diff: ${diff} min)`);
+      }
+    }
+
+    rows.push({ timestamp: ts, kwh, hourKey, meterId, type, meterTypeCode });
+  }
+
+  if (skipped) log.warn(`${label}: ${skipped} rækker sprunget over (ugyldige data)`);
+  if (!resolution) { resolution = 'hour'; log.info(`${label}: opløsning ikke detekteret — antager timeopløsning`); }
+
+  // Build per-meter summary: type code, date range, row count
+  const meterInfo = new Map();
+  if (meterIdCol) {
+    for (const r of rows) {
+      if (!r.meterId) continue;
+      if (!meterInfo.has(r.meterId)) {
+        meterInfo.set(r.meterId, { type: r.type || '', meterTypeCode: r.meterTypeCode || '', firstKey: r.hourKey, lastKey: r.hourKey, count: 0 });
+      }
+      const info = meterInfo.get(r.meterId);
+      info.count++;
+      if (r.hourKey < info.firstKey) info.firstKey = r.hourKey;
+      if (r.hourKey > info.lastKey) info.lastKey = r.hourKey;
+    }
+  }
+
+  const meterIds = [...meterInfo.keys()];
+  if (meterIds.length > 1) {
+    log.warn(`${label}: ${meterIds.length} målepunkter fundet — vælg det korrekte nedenfor`);
+    meterIds.forEach(id => {
+      const info = meterInfo.get(id);
+      log.warn(`  ${id}: ${meterTypeDescription(info)} — ${info.count} rækker (${info.firstKey?.slice(0,10)} → ${info.lastKey?.slice(0,10)})`);
+    });
+  } else if (meterIds.length === 1) {
+    const info = meterInfo.get(meterIds[0]);
+    log.info(`${label}: målepunkt: ${meterIds[0]} — ${meterTypeDescription(info)}`);
+  }
+
+  log.info(`${label}: ${rows.length} gyldige datapunkter. Periode: ${rows[0]?.hourKey?.slice(0,10)} → ${rows[rows.length-1]?.hourKey?.slice(0,10)}`);
+
+  return { rows, meterIds, meterInfo, resolution };
+}
+
+function findColumn(headers, candidates) {
+  for (const c of candidates) {
+    const match = headers.find(h => h.replace(/[^a-zæøå]/gi, '').toLowerCase().includes(c.replace(/[^a-zæøå]/gi, '').toLowerCase()));
+    if (match) return match;
+  }
+  return null;
+}
+
+function parseTimestamp(raw) {
+  if (!raw) return null;
+  // Normalize: replace . with - for date part, T or space as separator
+  // Handles: "01-01-2024 00:00", "2024-01-01 00:00:00", "01.01.2024 00:00", "2024-01-01T00:00"
+  let s = raw.trim();
+
+  // Pattern 1: DD-MM-YYYY HH:MM or DD.MM.YYYY HH:MM
+  const dmy = s.match(/^(\d{1,2})[-.](\d{1,2})[-.](\d{4})[\sT](\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if (dmy) {
+    const [, d, m, y, h, min, sec = '00'] = dmy;
+    return new Date(`${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}T${h.padStart(2,'0')}:${min}:${sec}`);
+  }
+
+  // Pattern 2: YYYY-MM-DD HH:MM or YYYY-MM-DDTHH:MM
+  const ymd = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})[\sT](\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if (ymd) {
+    const [, y, m, d, h, min, sec = '00'] = ymd;
+    return new Date(`${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}T${h.padStart(2,'0')}:${min}:${sec}`);
+  }
+
+  // Pattern 3: pure ISO
+  const d = new Date(s);
+  if (!isNaN(d)) return d;
+
+  return null;
+}
+
+function aggregateToHourly(rows) {
+  const map = new Map();
+  for (const r of rows) {
+    if (!map.has(r.hourKey)) map.set(r.hourKey, { kwh: 0, timestamp: r.timestamp });
+    map.get(r.hourKey).kwh += r.kwh;
+  }
+  return Array.from(map.entries())
+    .map(([hourKey, { kwh, timestamp }]) => {
+      const d = new Date(timestamp);
+      d.setMinutes(0, 0, 0);
+      return { timestamp: d, kwh, hourKey };
+    })
+    .sort((a, b) => a.timestamp - b.timestamp);
+}
+
+// Filter to one meter, then aggregate to hourly if needed
+function processRows(allRows, resolution, meterId) {
+  const rows = meterId ? allRows.filter(r => r.meterId === meterId) : allRows;
+  if (resolution === 'quarter') {
+    log.info(`Aggregerer ${rows.length} 15-min rækker til timer...`);
+    return aggregateToHourly(rows);
+  }
+  return rows;
+}
+
+// Extract "YYYY-MM-DDTHH" directly from the raw eloverblik timestamp string —
+// no Date object, no timezone conversion. Matches HourDK format from EDS by construction.
+function rawToHourKey(raw) {
+  const s = raw.trim().replace(/^["']|["']$/g, '');
+
+  // DD-MM-YYYY HH:MM or DD.MM.YYYY HH:MM
+  const dmy = s.match(/^(\d{1,2})[.-](\d{1,2})[.-](\d{4})[\sT](\d{1,2}):\d{2}/);
+  if (dmy) {
+    const [, d, m, y, h] = dmy;
+    return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}T${h.padStart(2,'0')}`;
+  }
+
+  // YYYY-MM-DD HH:MM or YYYY-MM-DDTHH:MM
+  const ymd = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})[\sT](\d{1,2}):\d{2}/);
+  if (ymd) {
+    const [, y, m, d, h] = ymd;
+    return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}T${h.padStart(2,'0')}`;
+  }
+
+  return null;
+}
+
+// ─── Energi Data Service ──────────────────────────────────────────────────────
+
+const CUTOFF = '2025-10-01'; // Elspotprices → DayAheadPrices dataset switch
+
+function datasetForDay(day) {
+  return day < CUTOFF ? 'Elspotprices' : 'DayAheadPrices';
+}
+
+function uniqueMonths(days) {
+  return [...new Set(days.map(d => d.slice(0, 7)))].sort();
+}
+
+// Try to load a pre-built monthly file from data/prices/{area}/{YYYY-MM}.json.
+// Returns the number of hours stored, or null if the file is unavailable.
+async function loadStaticMonth(priceArea, ym, cache, signal) {
+  try {
+    const resp = await fetch(`data/prices/${priceArea}/${ym}.json`, { signal, cache: 'force-cache' });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const prices = data.prices || {};
+
+    // Group entries by day and store in IndexedDB cache
+    const byDay = new Map();
+    for (const [hourKey, spotOere] of Object.entries(prices)) {
+      const day = hourKey.slice(0, 10);
+      if (!byDay.has(day)) byDay.set(day, []);
+      byDay.get(day).push({ hourKey, spotOere });
+    }
+    for (const [day, records] of byDay) {
+      await cache.storeDayPrices(priceArea, day, records);
+    }
+    return Object.keys(prices).length;
+  } catch (e) {
+    if (e.name === 'AbortError') throw e;
+    return null;
+  }
+}
+
+// startDay/endDay are "YYYY-MM-DD" strings — no Date objects, no timezone
+async function fetchSpotPrices(startDay, endDay, priceArea, signal) {
+  const cache = state.cache;
+
+  // 1. IndexedDB cache (fastest)
+  let missingDays = await cache.getMissingDays(priceArea, startDay, endDay);
+  const totalDays = getDaysInRange(startDay, endDay).length;
+
+  if (missingDays.length === 0) {
+    log.info(`Alle ${totalDays} dage i lokal cache — ingen netværkskald`);
+    updateCacheStatus(`Cache: ${totalDays} dage gemt (${priceArea})`);
+    return cache.getPrices(priceArea, startDay, endDay);
+  }
+
+  // 2. Statiske månedsfiler fra repo'et (data/prices/...) — ingen CORS, ingen rate-limit
+  const monthsNeeded = uniqueMonths(missingDays);
+  log.info(`Cache: ${totalDays - missingDays.length}/${totalDays} dage — prøver statiske filer for ${monthsNeeded.length} måned(er)`);
+  updateCacheStatus(`Tjekker statisk cache (${monthsNeeded.length} måneder)...`);
+
+  let staticHits = 0;
+  for (const ym of monthsNeeded) {
+    if (signal?.aborted) throw new DOMException('Afbrudt', 'AbortError');
+    const hours = await loadStaticMonth(priceArea, ym, cache, signal);
+    if (hours !== null) { staticHits++; log.info(`  ${ym}: ${hours} timer fra statisk fil`); }
+  }
+  if (staticHits) log.info(`Indlæst ${staticHits}/${monthsNeeded.length} måneder fra statiske filer`);
+
+  // Re-check missing after static load
+  missingDays = await cache.getMissingDays(priceArea, startDay, endDay);
+  if (missingDays.length === 0) {
+    log.info(`Alle dage nu dækket via statisk cache — ingen API-kald nødvendigt`);
+    updateCacheStatus(`Cache: ${totalDays} dage gemt (${priceArea})`);
+    return cache.getPrices(priceArea, startDay, endDay);
+  }
+
+  // 3. Live API for resterende dage (typisk kun helt nye dage som action'en endnu ikke har fanget)
+  log.info(`${missingDays.length} dage mangler stadig — henter live fra API`);
+  updateCacheStatus(`Henter ${missingDays.length} dage live fra API...`);
+
+  const ranges = groupDaysIntoRanges(missingDays);
+  log.info(`Live-fetch i ${ranges.length} interval(ler): ${ranges.map(([s, e]) => s === e ? s : `${s}→${e}`).join(', ')}`);
+
+  let fetched = 0;
+  for (const [rangeStart, rangeEnd] of ranges) {
+    await fetchRangeAndCache(priceArea, rangeStart, rangeEnd, cache, signal,
+      (chunkDays) => {
+        fetched += chunkDays;
+        updateCacheStatus(`Live-fetch: ${fetched}/${missingDays.length} dage gemt...`);
+      }
+    );
+  }
+
+  const result = await cache.getPrices(priceArea, startDay, endDay);
+  const newTotal = await cache.getDayCount(priceArea);
+  log.info(`Spotpriser: ${result.size} timer klar (cache indeholder nu ${newTotal} dage for ${priceArea})`);
+  updateCacheStatus(`Cache: ${newTotal} dage gemt (${priceArea})`);
+  return result;
+}
+
+const CHUNK_DAYS = 180; // max days per API request (~4380 records, well under limit of 10000)
+
+// Elspotprices has HourDK; DayAheadPrices only has HourUTC — convert to Copenhagen local time
+function utcToHourKeyDK(utcStr) {
+  const d = new Date(utcStr.endsWith('Z') ? utcStr : utcStr + 'Z');
+  const parts = new Intl.DateTimeFormat('sv', {
+    timeZone: 'Europe/Copenhagen',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', hourCycle: 'h23',
+  }).formatToParts(d);
+  const p = Object.fromEntries(parts.map(x => [x.type, x.value]));
+  return `${p.year}-${p.month}-${p.day}T${p.hour}`;
+}
+
+// Live fetch til Energi Data Service. Kun DayAheadPrices har CORS-header — Elspotprices kan IKKE
+// kaldes direkte fra browseren, så historiske data (før okt 2025) MÅ komme fra statiske filer i repo'et
+// (genereret af scripts/fetch-prices.mjs via GitHub Action). Denne funktion kaldes kun som fallback.
+async function fetchSegment(dataset, priceArea, startDay, endDay, signal) {
+  const url = new URL(`https://api.energidataservice.dk/dataset/${dataset}`);
+  url.searchParams.set('start', `${startDay}T00:00`);
+  url.searchParams.set('end', `${endDay}T23:59`);
+  url.searchParams.set('filter', JSON.stringify({ PriceArea: priceArea }));
+  url.searchParams.set('limit', '5000');
+  if (dataset === 'Elspotprices') {
+    url.searchParams.set('columns', 'HourDK,SpotPriceDKK');
+    url.searchParams.set('sort', 'HourDK ASC');
+  } else {
+    url.searchParams.set('columns', 'TimeDK,DayAheadPriceDKK');
+    url.searchParams.set('sort', 'TimeDK ASC');
+  }
+
+  const json = await fetchWithRetry(url.toString(), dataset, signal);
+  return json.records || [];
+}
+
+async function fetchRangeAndCache(priceArea, startDay, endDay, cache, signal, onChunkDone) {
+  let cursor = startDay;
+  while (cursor <= endDay) {
+    if (signal?.aborted) throw new DOMException('Afbrudt', 'AbortError');
+
+    const chunkEnd = offsetDay(cursor, CHUNK_DAYS - 1);
+    const actualEnd = chunkEnd <= endDay ? chunkEnd : endDay;
+
+    // Split the chunk across CUTOFF: Elspotprices har historisk data, DayAheadPrices har fra okt 2025.
+    // Tomme svar mangler CORS-headers → fetch fejler — derfor MÅ vi ramme det rigtige datasæt.
+    const segments = [];
+    if (cursor < CUTOFF) {
+      segments.push({
+        dataset: 'Elspotprices',
+        start: cursor,
+        end: actualEnd < CUTOFF ? actualEnd : offsetDay(CUTOFF, -1),
+      });
+    }
+    if (actualEnd >= CUTOFF) {
+      segments.push({
+        dataset: 'DayAheadPrices',
+        start: cursor >= CUTOFF ? cursor : CUTOFF,
+        end: actualEnd,
+      });
+    }
+
+    // Aggregér 15-min priser til timegennemsnit (DayAheadPrices har 15-min opløsning)
+    const hourBuckets = new Map(); // hourKey → { sum, count }
+    for (const seg of segments) {
+      const records = await fetchSegment(seg.dataset, priceArea, seg.start, seg.end, signal);
+      for (const r of records) {
+        // Elspotprices: HourDK — DayAheadPrices: TimeDK (begge i dansk lokal tid)
+        const hourKey = (r.HourDK ?? r.TimeDK)?.slice(0, 13);
+        if (!hourKey) continue;
+        const price = r.SpotPriceDKK ?? r.DayAheadPriceDKK;
+        if (price == null) continue;
+        const b = hourBuckets.get(hourKey) || { sum: 0, count: 0 };
+        b.sum += price;
+        b.count++;
+        hourBuckets.set(hourKey, b);
+      }
+    }
+
+    const byDay = new Map();
+    for (const [hourKey, { sum, count }] of hourBuckets) {
+      const day = hourKey.slice(0, 10);
+      const spotOere = sum / count * 0.1;
+      if (!byDay.has(day)) byDay.set(day, []);
+      byDay.get(day).push({ hourKey, spotOere });
+    }
+
+    for (const [day, recs] of byDay) {
+      await cache.storeDayPrices(priceArea, day, recs);
+    }
+
+    onChunkDone?.(getDaysInRange(cursor, actualEnd).length);
+    cursor = offsetDay(actualEnd, 1);
+  }
+}
+
+// Fetch with retry on rate-limit. When 429 lacks CORS headers, Firefox throws
+// TypeError("NetworkError") — we can't read the status, so we treat any TypeError as
+// a likely rate-limit and retry with backoff.
+function updateRunStatus(msg) {
+  const el = document.getElementById('analyzeStatusText');
+  if (el) el.textContent = msg;
+}
+
+async function fetchWithRetry(url, label, signal, attempts = 3) {
+  const delays = [15000, 30000, 60000]; // 15s, 30s, 60s
+
+  for (let i = 0; i < attempts; i++) {
+    if (signal?.aborted) throw new DOMException('Afbrudt', 'AbortError');
+
+    const attempt = `${label} (forsøg ${i + 1}/${attempts})`;
+    log.info(`${attempt}: GET ${url}`);
+    updateRunStatus(`${attempt}: henter data...`);
+
+    try {
+      const resp = await fetch(url, { signal });
+
+      if (resp.status === 429) {
+        const retryAfter = resp.headers.get('Retry-After');
+        const waitSec = retryAfter ? parseInt(retryAfter) : Math.round(delays[i] / 1000);
+        log.warn(`${attempt}: 429 rate-limit (Retry-After: ${retryAfter ?? 'ikke angivet'}) — venter ${waitSec}s`);
+        await countdown(waitSec, signal, s =>
+          updateRunStatus(`${label}: rate-limit (429) — forsøg ${i+2}/${attempts} om ${s}s`)
+        );
+        continue;
+      }
+
+      if (!resp.ok) {
+        const body = await resp.text().catch(() => '');
+        throw new Error(`HTTP ${resp.status} — ${body.slice(0, 200)}`);
+      }
+
+      const json = await resp.json();
+      log.info(`${attempt}: OK — ${json.records?.length ?? 0} records hentet`);
+      return json;
+
+    } catch (e) {
+      if (e.name === 'AbortError') throw e;
+
+      if (e.name === 'TypeError' && i < attempts - 1) {
+        // 429 uden CORS-header → browser ser det som TypeError/NetworkError
+        const waitSec = Math.round(delays[i] / 1000);
+        log.warn(`${attempt}: netværksfejl — sandsynligvis 429 uden CORS-header`);
+        log.warn(`  Fejl: ${e.message}`);
+        log.warn(`  URL: ${url}`);
+        await countdown(waitSec, signal, s =>
+          updateRunStatus(`${label}: netværksfejl (muligvis rate-limit) — forsøg ${i+2}/${attempts} om ${s}s`)
+        );
+        continue;
+      }
+
+      log.error(`${attempt}: fejl — ${e.message}`);
+      log.error(`  URL: ${url}`);
+      throw new Error(`${label}: ${e.message}`);
+    }
+  }
+  throw new Error(`${label}: rate-limit efter ${attempts} forsøg — vent et par minutter og prøv igen`);
+}
+
+// Live countdown: ticks every second, calls onTick(remainingSeconds), abortable
+function countdown(seconds, signal, onTick) {
+  return new Promise((resolve, reject) => {
+    let remaining = seconds;
+    onTick?.(remaining);
+    const iv = setInterval(() => {
+      remaining--;
+      onTick?.(remaining);
+      if (remaining <= 0) { clearInterval(iv); resolve(); }
+    }, 1000);
+    signal?.addEventListener('abort', () => {
+      clearInterval(iv);
+      reject(new DOMException('Afbrudt', 'AbortError'));
+    }, { once: true });
+  });
+}
+
+// Safe day arithmetic: uses UTC noon to avoid DST ambiguity
+function offsetDay(isoDay, n) {
+  const d = new Date(`${isoDay}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+}
+
+// ─── Analysis ─────────────────────────────────────────────────────────────────
+
+function getTariffs() {
+  const aftagepligt = document.getElementById('aftagepligt').checked;
+  return {
+    t1: +document.getElementById('t1').value,
+    t2: +document.getElementById('t2').value,
+    t3: aftagepligt ? 0 : +document.getElementById('t3').value,
+    t4: +document.getElementById('t4').value,
+    selfConsumpOverhead: +document.getElementById('selfConsumpOverhead').value,
+    badThreshold: +document.getElementById('badThreshold').value,
+    warnThreshold: +document.getElementById('warnThreshold').value,
+  };
+}
+
+function analyze(exportRows, spotPrices, tariffs) {
+  const totalFradrag = tariffs.t1 + tariffs.t2 + tariffs.t3 + tariffs.t4;
+  const results = [];
+
+  let missingPrices = 0;
+
+  for (const row of exportRows) {
+    if (row.kwh <= 0) continue;
+
+    const spotOere = spotPrices.get(row.hourKey);
+
+    if (spotOere === undefined) { missingPrices++; continue; }
+
+    const nettoEksportOere = spotOere - totalFradrag;
+    const selvforbrugVaerdi = spotOere + tariffs.selfConsumpOverhead; // øre/kWh
+    const tabtFortjenesteDKK = Math.max(0, (selvforbrugVaerdi - nettoEksportOere) * row.kwh / 100);
+
+    results.push({
+      timestamp: row.timestamp,
+      hourKey: row.hourKey,
+      kwh: row.kwh,
+      spotOere,
+      nettoEksportOere,
+      selvforbrugVaerdi,
+      tabtFortjenesteDKK,
+      isDaarlig: nettoEksportOere < tariffs.badThreshold,
+      isWarn: nettoEksportOere >= tariffs.badThreshold && nettoEksportOere < tariffs.warnThreshold,
+    });
+  }
+
+  if (missingPrices) log.warn(`${missingPrices} eksport-timer manglede spotpris (typisk DST-overgange eller manglende API-data)`);
+
+  return results;
+}
+
+// ─── Rendering ────────────────────────────────────────────────────────────────
+
+function renderResults(data, tariffs) {
+  document.getElementById('results').style.display = 'block';
+  // Switch from debug tab (opened at analysis start) to results tab
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelector('.tab[data-tab="bad"]').classList.add('active');
+  document.getElementById('tab-bad').classList.add('active');
+  document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
+
+  const bad = data.filter(d => d.isDaarlig);
+  const totalKwh = data.reduce((s, d) => s + d.kwh, 0);
+  const totalIncome = data.reduce((s, d) => s + d.nettoEksportOere * d.kwh / 100, 0);
+  const totalTabt = data.reduce((s, d) => s + d.tabtFortjenesteDKK, 0);
+  const avgNetto = totalKwh ? totalIncome / totalKwh * 100 : 0;
+
+  const kpis = [
+    { label: 'Total eksport', value: totalKwh.toFixed(0) + ' kWh', cls: '' },
+    { label: 'Eksport-indtægt (netto)', value: fmtDKK(totalIncome), cls: 'green' },
+    { label: 'Gns. netto-eksportpris', value: avgNetto.toFixed(1) + ' øre/kWh', cls: avgNetto < 10 ? 'red' : avgNetto < 30 ? 'amber' : '' },
+    { label: 'Dårlige eksporttimer', value: bad.length + ' timer', cls: bad.length > 50 ? 'red' : bad.length > 0 ? 'amber' : 'green' },
+    { label: 'Tabt vs. selvforbrug', value: fmtDKK(totalTabt), cls: totalTabt > 500 ? 'red' : totalTabt > 100 ? 'amber' : 'green' },
+  ];
+
+  document.getElementById('kpiGrid').innerHTML = kpis.map(k =>
+    `<div class="kpi"><div class="kpi-label">${k.label}</div><div class="kpi-value ${k.cls}">${k.value}</div></div>`
+  ).join('');
+
+  renderBadHoursTable(data, tariffs);
+  renderMonthlyTable(data);
+  updateStepIndicator(3);
+}
+
+function renderBadHoursTable(data, tariffs) {
+  const filtered = data.filter(d => d.isDaarlig || d.isWarn);
+  const sorted = [...filtered].sort((a, b) => state.sortDir * (b[state.sortCol] - a[state.sortCol]));
+
+  const tbody = document.getElementById('badHoursBody');
+  tbody.innerHTML = sorted.slice(0, 200).map(d => {
+    const cls = d.isDaarlig ? 'bad' : 'warn';
+    const badge = d.isDaarlig
+      ? `<span class="badge red">${d.nettoEksportOere < 0 ? 'Negativ pris' : 'Dårlig'}</span>`
+      : `<span class="badge amber">Lav pris</span>`;
+    return `<tr class="${cls}">
+      <td>${fmtDate(d.timestamp)}</td>
+      <td>${d.kwh.toFixed(3)}</td>
+      <td>${d.spotOere.toFixed(1)}</td>
+      <td style="color:${d.nettoEksportOere < 0 ? 'var(--red)' : 'inherit'}">${d.nettoEksportOere.toFixed(1)}</td>
+      <td>${d.selvforbrugVaerdi.toFixed(1)}</td>
+      <td>${fmtDKK(d.tabtFortjenesteDKK)}</td>
+      <td>${badge}</td>
+    </tr>`;
+  }).join('');
+
+  if (sorted.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px">Ingen timer under grænseværdien 🎉</td></tr>';
+  }
+}
+
+function renderMonthlyTable(data) {
+  const months = new Map();
+  for (const d of data) {
+    const key = d.hourKey.slice(0, 7); // "YYYY-MM" direct from string key
+    if (!months.has(key)) months.set(key, { kwh: 0, income: 0, bad: 0, tabt: 0, count: 0, nettoSum: 0 });
+    const m = months.get(key);
+    m.kwh += d.kwh;
+    m.income += d.nettoEksportOere * d.kwh / 100;
+    m.bad += d.isDaarlig ? 1 : 0;
+    m.tabt += d.tabtFortjenesteDKK;
+    m.nettoSum += d.nettoEksportOere;
+    m.count++;
+  }
+
+  const tbody = document.getElementById('monthlyBody');
+  tbody.innerHTML = [...months.entries()].sort().map(([k, m]) =>
+    `<tr>
+      <td>${fmtMonth(k)}</td>
+      <td>${m.kwh.toFixed(1)}</td>
+      <td>${fmtDKK(m.income)}</td>
+      <td style="color:${m.nettoSum/m.count < 10 ? 'var(--red)' : 'inherit'}">${(m.nettoSum/m.count).toFixed(1)}</td>
+      <td style="color:${m.bad > 10 ? 'var(--red)' : m.bad > 0 ? 'var(--accent)' : 'var(--green)'}">${m.bad}</td>
+      <td style="color:${m.tabt > 50 ? 'var(--red)' : 'inherit'}">${fmtDKK(m.tabt)}</td>
+    </tr>`
+  ).join('');
+}
+
+// ─── Formatters ───────────────────────────────────────────────────────────────
+
+function fmtDKK(v) { return v.toFixed(2).replace('.', ',') + ' kr'; }
+function fmtDate(d) {
+  return d.toLocaleString('da-DK', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+function fmtMonth(k) {
+  const [y, m] = k.split('-');
+  const names = ['Jan','Feb','Mar','Apr','Maj','Jun','Jul','Aug','Sep','Okt','Nov','Dec'];
+  return `${names[+m-1]} ${y}`;
+}
+
+// ─── Export CSV ───────────────────────────────────────────────────────────────
+
+function exportCSV() {
+  if (!state.analysisData) return;
+  const rows = [
+    ['Dato', 'Time', 'kWh eksporteret', 'Spotpris (øre/kWh)', 'Netto eksportpris (øre/kWh)', 'Selvforbrugsværdi (øre/kWh)', 'Tabt fortjeneste (kr)', 'Status'],
+    ...state.analysisData.map(d => [
+      d.timestamp.toLocaleDateString('da-DK'),
+      d.timestamp.toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' }),
+      d.kwh.toFixed(3).replace('.', ','),
+      d.spotOere.toFixed(2).replace('.', ','),
+      d.nettoEksportOere.toFixed(2).replace('.', ','),
+      d.selvforbrugVaerdi.toFixed(2).replace('.', ','),
+      d.tabtFortjenesteDKK.toFixed(2).replace('.', ','),
+      d.isDaarlig ? 'Dårlig' : d.isWarn ? 'Lav' : 'OK',
+    ])
+  ];
+  const csv = rows.map(r => r.join(';')).join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'solcelle-eksport-analyse.csv';
+  a.click();
+}
+
+// ─── Sort ─────────────────────────────────────────────────────────────────────
+
+function sortTable(col) {
+  if (state.sortCol === col) state.sortDir *= -1;
+  else { state.sortCol = col; state.sortDir = -1; }
+  if (state.analysisData) renderBadHoursTable(state.analysisData, getTariffs());
+}
+
+// ─── UI wiring ────────────────────────────────────────────────────────────────
+
+function updateTotalFradrag() {
+  const aftagepligt = document.getElementById('aftagepligt').checked;
+  const t3 = aftagepligt ? 0 : +document.getElementById('t3').value;
+  const total = +document.getElementById('t1').value + +document.getElementById('t2').value + t3 + +document.getElementById('t4').value;
+  document.getElementById('totalFradrag').textContent = total.toFixed(2).replace('.', ',');
+}
+
+['t1','t2','t3','t4'].forEach(id => document.getElementById(id).addEventListener('input', updateTotalFradrag));
+document.getElementById('aftagepligt').addEventListener('change', updateTotalFradrag);
+
+function setupDropZone(dropId, inputId, label, onLoad) {
+  const drop = document.getElementById(dropId);
+  const input = document.getElementById(inputId);
+
+  input.addEventListener('change', () => input.files[0] && handleFile(input.files[0], dropId, label, onLoad));
+
+  drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('drag-over'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('drag-over'));
+  drop.addEventListener('drop', e => {
+    e.preventDefault();
+    drop.classList.remove('drag-over');
+    const f = e.dataTransfer.files[0];
+    if (f) handleFile(f, dropId, label, onLoad);
+  });
+}
+
+function updateDropStatus(dropId, rows) {
+  const drop = document.getElementById(dropId);
+  drop.classList.add('loaded');
+  const statusEl = drop.querySelector('.drop-status');
+  statusEl.style.display = 'block';
+  statusEl.textContent = `✓ ${rows.length} timer indlæst (${rows[0].timestamp.toLocaleDateString('da-DK')} – ${rows[rows.length-1].timestamp.toLocaleDateString('da-DK')})`;
+}
+
+// Danish DataHub metering point type codes (målepunktstype_kode)
+// Source: Energinet DataHub / Eloverblik API documentation
+const METER_TYPE_CODES = {
+  D06: 'Leveret til net (eksport)',   // gross export — use for solar export analysis
+  D07: 'Forbrugt fra net (forbrug)',  // gross import — use for consumption analysis
+  E17: 'Forbrugsmålepunkt (netto)',   // net billing meter
+  E18: 'Produktionsmålepunkt',        // production meter point
+  E23: 'Reaktiv energi (import)',
+  E24: 'Reaktiv energi (eksport)',
+  D14: 'Nettoforbrug',
+};
+
+function meterTypeDescription(info) {
+  if (info.meterTypeCode && METER_TYPE_CODES[info.meterTypeCode]) {
+    return `${info.meterTypeCode} — ${METER_TYPE_CODES[info.meterTypeCode]}`;
+  }
+  if (info.meterTypeCode) return info.meterTypeCode;
+  return info.type || '?';
+}
+
+function showMeterSelector(allRows, meterIds, meterInfo, resolution, onSelect, onAutoForbrug) {
+  const sel = document.getElementById('meterSelector');
+  document.getElementById('meterCount').textContent = meterIds.length;
+
+  const selectEl = document.getElementById('meterIdSelect');
+  selectEl.innerHTML = meterIds.map(id => {
+    const info = meterInfo.get(id);
+    return `<option value="${id}">${id} — ${meterTypeDescription(info)}</option>`;
+  }).join('');
+
+  // Auto-select export meter: D06 (Leveret til net) > E18 (Produktionsmålepunkt) > keyword
+  const exportKeywords = ['leveret', 'eksport', 'produktion'];
+  const autoExportId =
+    meterIds.find(id => meterInfo.get(id)?.meterTypeCode === 'D06') ||
+    meterIds.find(id => meterInfo.get(id)?.meterTypeCode === 'E18') ||
+    meterIds.find(id => exportKeywords.some(k => (meterInfo.get(id)?.type || '').toLowerCase().includes(k)));
+  if (autoExportId) selectEl.value = autoExportId;
+
+  const hintEl = document.getElementById('meterHint');
+  const updateHint = () => {
+    const id = selectEl.value;
+    const info = meterInfo.get(id);
+    if (info) {
+      hintEl.textContent = `${info.count.toLocaleString('da-DK')} rækker — ${info.firstKey?.slice(0,10)} → ${info.lastKey?.slice(0,10)}`;
+    }
+  };
+  selectEl.addEventListener('change', updateHint);
+  updateHint();
+
+  sel.style.display = 'block';
+  sel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  const btn = document.getElementById('btnSelectMeter');
+  const handler = () => {
+    btn.removeEventListener('click', handler);
+    sel.style.display = 'none';
+    const selectedId = selectEl.value;
+    const selectedType = meterInfo.get(selectedId)?.type || '';
+    log.info(`Valgt målepunkt: ${selectedId} (${selectedType})`);
+    onSelect(processRows(allRows, resolution, selectedId));
+
+    // If the file also has a forbrug meter (E17), auto-load it
+    if (onAutoForbrug) {
+      const forbrugKeywords = ['forbrugt', 'forbrug', 'aftag'];
+      const forbrugId =
+        meterIds.find(id => id !== selectedId && meterInfo.get(id)?.meterTypeCode === 'D07') ||
+        meterIds.find(id => id !== selectedId && meterInfo.get(id)?.meterTypeCode === 'E17') ||
+        meterIds.find(id => id !== selectedId && forbrugKeywords.some(k => (meterInfo.get(id)?.type || '').toLowerCase().includes(k)));
+      if (forbrugId) {
+        log.info(`Auto-indlæser forbrug fra samme fil: ${forbrugId} (${meterInfo.get(forbrugId)?.type})`);
+        onAutoForbrug(forbrugId);
+      }
+    }
+  };
+  btn.addEventListener('click', handler);
+}
+
+function handleFile(file, dropId, label, onLoad) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const parsed = parseEloverblikCSV(e.target.result, label);
+    if (!parsed) return;
+    const { rows, meterIds, meterInfo, resolution } = parsed;
+    if (!rows.length) return;
+
+    if (meterIds.length > 1) {
+      const drop = document.getElementById(dropId);
+      drop.classList.add('loaded');
+      const statusEl = drop.querySelector('.drop-status');
+      statusEl.style.display = 'block';
+      statusEl.style.color = 'var(--accent)';
+      statusEl.textContent = `⚠ ${meterIds.length} målepunkter — vælg ét nedenfor`;
+
+      // When uploading to the export zone: also watch for a forbrug meter in the same file
+      const onAutoForbrug = dropId === 'dropExport' ? (forbrugId) => {
+        const forbrugRows = processRows(rows, resolution, forbrugId);
+        if (forbrugRows.length > 0) {
+          state.forbrugRows = forbrugRows;
+          updateDropStatus('dropForbrug', forbrugRows);
+        }
+      } : null;
+
+      showMeterSelector(rows, meterIds, meterInfo, resolution, (finalRows) => {
+        statusEl.style.color = '';
+        onLoad(finalRows);
+        updateDropStatus(dropId, finalRows);
+        checkReady();
+      }, onAutoForbrug);
+    } else {
+      const finalRows = processRows(rows, resolution, meterIds[0] ?? null);
+      onLoad(finalRows);
+      updateDropStatus(dropId, finalRows);
+      checkReady();
+    }
+  };
+  reader.readAsText(file, 'utf-8');
+}
+
+setupDropZone('dropExport', 'fileExport', 'Eksport', rows => { state.exportRows = rows; });
+setupDropZone('dropForbrug', 'fileForbrug', 'Forbrug', rows => { state.forbrugRows = rows; });
+
+function checkReady() {
+  const ready = state.exportRows && state.exportRows.length > 0;
+  document.getElementById('btnAnalyze').disabled = !ready;
+  if (ready) updateStepIndicator(2);
+}
+
+function updateStepIndicator(active) {
+  for (let i = 1; i <= 3; i++) {
+    const el = document.getElementById(`step${i}`);
+    el.className = 'step' + (i < active ? ' done' : i === active ? ' active' : '');
+  }
+}
+
+document.getElementById('btnAnalyze').addEventListener('click', async () => {
+  const tariffs = getTariffs();
+  const statusBar = document.getElementById('analyzeStatus');
+  const statusText = document.getElementById('analyzeStatusText');
+  const btnAnalyze = document.getElementById('btnAnalyze');
+  const btnStop = document.getElementById('btnStop');
+
+  state.abortController = new AbortController();
+  const signal = state.abortController.signal;
+
+  btnAnalyze.disabled = true;
+  btnStop.style.display = '';
+  statusBar.style.display = 'flex';
+
+  try {
+    const rows = state.exportRows;
+    const startDay = rows[0].hourKey.slice(0, 10);
+    const endDay = rows[rows.length - 1].hourKey.slice(0, 10);
+    const priceArea = document.getElementById('priceArea').value;
+
+    log.info(`Analyse startet: ${rows.length} timer, ${startDay} → ${endDay}, ${priceArea}`);
+    statusText.textContent = `Tjekker cache...`;
+
+    // Åbn debug-tab med det samme så log er synlig under API-kald
+    document.getElementById('results').style.display = 'block';
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelector('.tab[data-tab="debug"]').classList.add('active');
+    document.getElementById('tab-debug').classList.add('active');
+    const spotPrices = await fetchSpotPrices(startDay, endDay, priceArea, signal);
+    state.spotPrices = spotPrices;
+
+    if (signal.aborted) return;
+
+    statusText.textContent = 'Analyserer data...';
+    const data = analyze(rows, spotPrices, tariffs);
+    state.analysisData = data;
+
+    statusText.textContent = `Analyse færdig — ${data.length} timer analyseret`;
+    renderResults(data, tariffs);
+  } catch (e) {
+    if (e.name === 'AbortError') {
+      log.info('Analyse stoppet af bruger');
+      statusText.textContent = 'Stoppet';
+    } else {
+      log.error(`Analyse fejlede: ${e.message}`);
+      statusText.textContent = `Fejl: ${e.message}`;
+    }
+  } finally {
+    btnAnalyze.disabled = false;
+    btnStop.style.display = 'none';
+    state.abortController = null;
+    setTimeout(() => { statusBar.style.display = 'none'; }, 4000);
+  }
+});
+
+document.getElementById('btnStop').addEventListener('click', () => {
+  state.abortController?.abort();
+  document.getElementById('btnStop').style.display = 'none';
+});
+
+document.getElementById('btnExportCSV').addEventListener('click', exportCSV);
+
+document.getElementById('btnClearCache').addEventListener('click', async () => {
+  const priceArea = document.getElementById('priceArea').value;
+  await state.cache.clear();
+  log.info('Lokal cache ryddet');
+  updateCacheStatus('Cache ryddet — næste analyse henter al data fra API');
+});
+
+// Show cache count on load
+(async () => {
+  try {
+    const priceArea = document.getElementById('priceArea').value;
+    const count = await state.cache.getDayCount(priceArea);
+    updateCacheStatus(count > 0 ? `Cache: ${count} dage gemt (${priceArea})` : 'Cache: tom — data hentes fra API ved analyse');
+  } catch { updateCacheStatus('Cache ikke tilgængelig'); }
+})();
+
+// Lightbox
+function openLightbox(src) {
+  document.getElementById('lightboxImg').src = src;
+  document.getElementById('lightbox').classList.add('open');
+}
+document.getElementById('lightbox').addEventListener('click', () =>
+  document.getElementById('lightbox').classList.remove('open')
+);
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.getElementById('lightbox').classList.remove('open');
+});
+
+// Guide arrow rotation
+document.getElementById('guideDetails').addEventListener('toggle', function() {
+  document.getElementById('guideArrow').style.transform = this.open ? 'rotate(90deg)' : '';
+});
+
+// Tabs
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+  });
+});
+</script>
+</body>
+</html>
