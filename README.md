@@ -85,13 +85,21 @@ Følg fremdriften under "Actions"-fanen. Workflow'en committer per kørsel — s
 
 Workflow'en kører automatisk **dagligt kl. 14:00 UTC** og opdaterer kun aktuel og næste måned (day-ahead-priser for i morgen publiceres ~13:00 CET). Cron'en sover ind igen efter ~30 sekunder hvis intet er ændret.
 
-## Arkitektur — hvorfor statiske filer?
+## Arkitektur — én datakilde i browseren
 
-`Elspotprices`-endpointet (historiske data før 2025-10-01) returnerer **ikke** `Access-Control-Allow-Origin`-header, og rate-limiter aggressivt (~1 kald per 100 sek). Det betyder at browseren ikke kan hente historiske data direkte fra Energi Data Service.
+Browseren henter **kun** spotpriser fra statiske JSON-filer i repo'et (`data/prices/{area}/{YYYY-MM}.json`). Intet live API-kald til Energi Data Service fra klienten.
 
-Løsningen: en GitHub Action kører i baggrunden, henter data fra API'et med proper rate-limit-håndtering, og committer resultatet som versionsstyrede JSON-filer. Browseren henter dem som almindelige statiske filer (samme origin → ingen CORS).
+Hvorfor:
+- EDS rate-limiter aggressivt (~1 kald/15 min for anonymous), og fejlsvar mangler CORS-headers → browseren ser dem som NetworkError uden mulighed for håndtering
+- Statiske filer er hurtige, cacheable, versionsstyrede, og kan inspiceres direkte i repo'et
+- Én datakilde gør debugging og fejlhåndtering simpel
 
-`DayAheadPrices` (det nyere endpoint fra 2025-10-01) **har** CORS-headers og kan fetches direkte fra browseren. Det bruges som fallback for helt nye dage som Action'en ikke har nået endnu.
+Backfill-flowet:
+1. GitHub Action (`scripts/fetch-prices.mjs`) håndterer alle EDS-kald med rate-limit-respekt
+2. Den committer månedsfiler løbende (hver 5. fil) — backfill kan tage timer uden at miste arbejde
+3. Cron kører dagligt kl. 14:00 UTC og opdaterer kun aktuel/næste måned
+
+Hvis brugeren analyserer en periode hvor backfill ikke er nået endnu, vises en klar fejlbesked med præcis hvilke måneder der mangler.
 
 ## Energi Data Service kolonner — gotchas
 

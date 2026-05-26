@@ -603,22 +603,6 @@ function getDaysInRange(startDay, endDay) {
   return days;
 }
 
-// Group sorted day strings into contiguous date ranges to minimise API calls
-function groupDaysIntoRanges(days) {
-  if (!days.length) return [];
-  const sorted = [...days].sort();
-  const ranges = [];
-  let rangeStart = sorted[0];
-  let prev = sorted[0];
-  for (let i = 1; i < sorted.length; i++) {
-    const gap = (new Date(sorted[i]) - new Date(prev)) / 86400000;
-    if (gap > 1) { ranges.push([rangeStart, prev]); rangeStart = sorted[i]; }
-    prev = sorted[i];
-  }
-  ranges.push([rangeStart, prev]);
-  return ranges;
-}
-
 // ─── State ────────────────────────────────────────────────────────────────────
 const state = {
   exportRows: null,   // [{timestamp: Date, kwh: number}]
@@ -831,28 +815,24 @@ function rawToHourKey(raw) {
   return null;
 }
 
-// ─── Energi Data Service ──────────────────────────────────────────────────────
-
-const CUTOFF = '2025-10-01'; // Elspotprices → DayAheadPrices dataset switch
-
-function datasetForDay(day) {
-  return day < CUTOFF ? 'Elspotprices' : 'DayAheadPrices';
-}
+// ─── Spotpriser (statisk cache + IndexedDB) ──────────────────────────────────
+// Sitet henter KUN fra data/prices/{area}/{YYYY-MM}.json — disse filer
+// vedligeholdes af GitHub Action (scripts/fetch-prices.mjs) der kører dagligt
+// og er det eneste sted EDS rammes. Ingen live API-kald fra browseren.
 
 function uniqueMonths(days) {
   return [...new Set(days.map(d => d.slice(0, 7)))].sort();
 }
 
-// Try to load a pre-built monthly file from data/prices/{area}/{YYYY-MM}.json.
-// Returns the number of hours stored, or null if the file is unavailable.
+// Henter én månedsfil fra repo'et, gemmer timerne i IndexedDB. Returner antal
+// timer skrevet, eller null hvis filen ikke findes endnu.
 async function loadStaticMonth(priceArea, ym, cache, signal) {
   try {
-    const resp = await fetch(`data/prices/${priceArea}/${ym}.json`, { signal, cache: 'force-cache' });
+    const resp = await fetch(`data/prices/${priceArea}/${ym}.json`, { signal, cache: 'no-cache' });
     if (!resp.ok) return null;
     const data = await resp.json();
     const prices = data.prices || {};
 
-    // Group entries by day and store in IndexedDB cache
     const byDay = new Map();
     for (const [hourKey, spotOere] of Object.entries(prices)) {
       const day = hourKey.slice(0, 10);
@@ -869,245 +849,45 @@ async function loadStaticMonth(priceArea, ym, cache, signal) {
   }
 }
 
-// startDay/endDay are "YYYY-MM-DD" strings — no Date objects, no timezone
+// Læs spotpriser for [startDay, endDay] fra IndexedDB-cache; hvis manglende
+// dage findes, hent de relevante månedsfiler. Kaster fejl hvis nogle måneder
+// stadig mangler bagefter (= backfill er ikke nået dertil endnu).
 async function fetchSpotPrices(startDay, endDay, priceArea, signal) {
   const cache = state.cache;
 
-  // 1. IndexedDB cache (fastest)
   let missingDays = await cache.getMissingDays(priceArea, startDay, endDay);
   const totalDays = getDaysInRange(startDay, endDay).length;
 
   if (missingDays.length === 0) {
-    log.info(`Alle ${totalDays} dage i lokal cache — ingen netværkskald`);
+    log.info(`Alle ${totalDays} dage i browser-cache — ingen netværkskald`);
     updateCacheStatus(`Cache: ${totalDays} dage gemt (${priceArea})`);
     return cache.getPrices(priceArea, startDay, endDay);
   }
 
-  // 2. Statiske månedsfiler fra repo'et (data/prices/...) — ingen CORS, ingen rate-limit
   const monthsNeeded = uniqueMonths(missingDays);
-  log.info(`Cache: ${totalDays - missingDays.length}/${totalDays} dage — prøver statiske filer for ${monthsNeeded.length} måned(er)`);
-  updateCacheStatus(`Tjekker statisk cache (${monthsNeeded.length} måneder)...`);
+  log.info(`Browser-cache: ${totalDays - missingDays.length}/${totalDays} dage — henter ${monthsNeeded.length} måned(er) fra repo`);
+  updateCacheStatus(`Henter ${monthsNeeded.length} måneder fra statisk cache...`);
 
-  let staticHits = 0;
+  const missingMonths = [];
   for (const ym of monthsNeeded) {
     if (signal?.aborted) throw new DOMException('Afbrudt', 'AbortError');
     const hours = await loadStaticMonth(priceArea, ym, cache, signal);
-    if (hours !== null) { staticHits++; log.info(`  ${ym}: ${hours} timer fra statisk fil`); }
+    if (hours !== null) log.info(`  ${ym}: ${hours} timer indlæst`);
+    else { log.warn(`  ${ym}: mangler i statisk cache`); missingMonths.push(ym); }
   }
-  if (staticHits) log.info(`Indlæst ${staticHits}/${monthsNeeded.length} måneder fra statiske filer`);
 
-  // Re-check missing after static load
   missingDays = await cache.getMissingDays(priceArea, startDay, endDay);
   if (missingDays.length === 0) {
-    log.info(`Alle dage nu dækket via statisk cache — ingen API-kald nødvendigt`);
+    log.info(`Alle ${totalDays} dage tilgængelige`);
     updateCacheStatus(`Cache: ${totalDays} dage gemt (${priceArea})`);
     return cache.getPrices(priceArea, startDay, endDay);
   }
 
-  // 3. Live API for resterende dage (typisk kun helt nye dage som action'en endnu ikke har fanget)
-  log.info(`${missingDays.length} dage mangler stadig — henter live fra API`);
-  updateCacheStatus(`Henter ${missingDays.length} dage live fra API...`);
-
-  const ranges = groupDaysIntoRanges(missingDays);
-  log.info(`Live-fetch i ${ranges.length} interval(ler): ${ranges.map(([s, e]) => s === e ? s : `${s}→${e}`).join(', ')}`);
-
-  let fetched = 0;
-  for (const [rangeStart, rangeEnd] of ranges) {
-    await fetchRangeAndCache(priceArea, rangeStart, rangeEnd, cache, signal,
-      (chunkDays) => {
-        fetched += chunkDays;
-        updateCacheStatus(`Live-fetch: ${fetched}/${missingDays.length} dage gemt...`);
-      }
-    );
-  }
-
-  const result = await cache.getPrices(priceArea, startDay, endDay);
-  const newTotal = await cache.getDayCount(priceArea);
-  log.info(`Spotpriser: ${result.size} timer klar (cache indeholder nu ${newTotal} dage for ${priceArea})`);
-  updateCacheStatus(`Cache: ${newTotal} dage gemt (${priceArea})`);
-  return result;
-}
-
-const CHUNK_DAYS = 180; // max days per API request (~4380 records, well under limit of 10000)
-
-// Elspotprices has HourDK; DayAheadPrices only has HourUTC — convert to Copenhagen local time
-function utcToHourKeyDK(utcStr) {
-  const d = new Date(utcStr.endsWith('Z') ? utcStr : utcStr + 'Z');
-  const parts = new Intl.DateTimeFormat('sv', {
-    timeZone: 'Europe/Copenhagen',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', hourCycle: 'h23',
-  }).formatToParts(d);
-  const p = Object.fromEntries(parts.map(x => [x.type, x.value]));
-  return `${p.year}-${p.month}-${p.day}T${p.hour}`;
-}
-
-// Live fetch til Energi Data Service. Kun DayAheadPrices har CORS-header — Elspotprices kan IKKE
-// kaldes direkte fra browseren, så historiske data (før okt 2025) MÅ komme fra statiske filer i repo'et
-// (genereret af scripts/fetch-prices.mjs via GitHub Action). Denne funktion kaldes kun som fallback.
-async function fetchSegment(dataset, priceArea, startDay, endDay, signal) {
-  const url = new URL(`https://api.energidataservice.dk/dataset/${dataset}`);
-  url.searchParams.set('start', `${startDay}T00:00`);
-  url.searchParams.set('end', `${endDay}T23:59`);
-  url.searchParams.set('filter', JSON.stringify({ PriceArea: priceArea }));
-  url.searchParams.set('limit', '5000');
-  if (dataset === 'Elspotprices') {
-    url.searchParams.set('columns', 'HourDK,SpotPriceDKK');
-    url.searchParams.set('sort', 'HourDK ASC');
-  } else {
-    url.searchParams.set('columns', 'TimeDK,DayAheadPriceDKK');
-    url.searchParams.set('sort', 'TimeDK ASC');
-  }
-
-  const json = await fetchWithRetry(url.toString(), dataset, signal);
-  return json.records || [];
-}
-
-async function fetchRangeAndCache(priceArea, startDay, endDay, cache, signal, onChunkDone) {
-  let cursor = startDay;
-  while (cursor <= endDay) {
-    if (signal?.aborted) throw new DOMException('Afbrudt', 'AbortError');
-
-    const chunkEnd = offsetDay(cursor, CHUNK_DAYS - 1);
-    const actualEnd = chunkEnd <= endDay ? chunkEnd : endDay;
-
-    // Split the chunk across CUTOFF: Elspotprices har historisk data, DayAheadPrices har fra okt 2025.
-    // Tomme svar mangler CORS-headers → fetch fejler — derfor MÅ vi ramme det rigtige datasæt.
-    const segments = [];
-    if (cursor < CUTOFF) {
-      segments.push({
-        dataset: 'Elspotprices',
-        start: cursor,
-        end: actualEnd < CUTOFF ? actualEnd : offsetDay(CUTOFF, -1),
-      });
-    }
-    if (actualEnd >= CUTOFF) {
-      segments.push({
-        dataset: 'DayAheadPrices',
-        start: cursor >= CUTOFF ? cursor : CUTOFF,
-        end: actualEnd,
-      });
-    }
-
-    // Aggregér 15-min priser til timegennemsnit (DayAheadPrices har 15-min opløsning)
-    const hourBuckets = new Map(); // hourKey → { sum, count }
-    for (const seg of segments) {
-      const records = await fetchSegment(seg.dataset, priceArea, seg.start, seg.end, signal);
-      for (const r of records) {
-        // Elspotprices: HourDK — DayAheadPrices: TimeDK (begge i dansk lokal tid)
-        const hourKey = (r.HourDK ?? r.TimeDK)?.slice(0, 13);
-        if (!hourKey) continue;
-        const price = r.SpotPriceDKK ?? r.DayAheadPriceDKK;
-        if (price == null) continue;
-        const b = hourBuckets.get(hourKey) || { sum: 0, count: 0 };
-        b.sum += price;
-        b.count++;
-        hourBuckets.set(hourKey, b);
-      }
-    }
-
-    const byDay = new Map();
-    for (const [hourKey, { sum, count }] of hourBuckets) {
-      const day = hourKey.slice(0, 10);
-      const spotOere = sum / count * 0.1;
-      if (!byDay.has(day)) byDay.set(day, []);
-      byDay.get(day).push({ hourKey, spotOere });
-    }
-
-    for (const [day, recs] of byDay) {
-      await cache.storeDayPrices(priceArea, day, recs);
-    }
-
-    onChunkDone?.(getDaysInRange(cursor, actualEnd).length);
-    cursor = offsetDay(actualEnd, 1);
-  }
-}
-
-// Fetch with retry on rate-limit. When 429 lacks CORS headers, Firefox throws
-// TypeError("NetworkError") — we can't read the status, so we treat any TypeError as
-// a likely rate-limit and retry with backoff.
-function updateRunStatus(msg) {
-  const el = document.getElementById('analyzeStatusText');
-  if (el) el.textContent = msg;
-}
-
-async function fetchWithRetry(url, label, signal, attempts = 3) {
-  const delays = [15000, 30000, 60000]; // 15s, 30s, 60s
-
-  for (let i = 0; i < attempts; i++) {
-    if (signal?.aborted) throw new DOMException('Afbrudt', 'AbortError');
-
-    const attempt = `${label} (forsøg ${i + 1}/${attempts})`;
-    log.info(`${attempt}: GET ${url}`);
-    updateRunStatus(`${attempt}: henter data...`);
-
-    try {
-      const resp = await fetch(url, { signal });
-
-      if (resp.status === 429) {
-        const retryAfter = resp.headers.get('Retry-After');
-        const waitSec = retryAfter ? parseInt(retryAfter) : Math.round(delays[i] / 1000);
-        log.warn(`${attempt}: 429 rate-limit (Retry-After: ${retryAfter ?? 'ikke angivet'}) — venter ${waitSec}s`);
-        await countdown(waitSec, signal, s =>
-          updateRunStatus(`${label}: rate-limit (429) — forsøg ${i+2}/${attempts} om ${s}s`)
-        );
-        continue;
-      }
-
-      if (!resp.ok) {
-        const body = await resp.text().catch(() => '');
-        throw new Error(`HTTP ${resp.status} — ${body.slice(0, 200)}`);
-      }
-
-      const json = await resp.json();
-      log.info(`${attempt}: OK — ${json.records?.length ?? 0} records hentet`);
-      return json;
-
-    } catch (e) {
-      if (e.name === 'AbortError') throw e;
-
-      if (e.name === 'TypeError' && i < attempts - 1) {
-        // 429 uden CORS-header → browser ser det som TypeError/NetworkError
-        const waitSec = Math.round(delays[i] / 1000);
-        log.warn(`${attempt}: netværksfejl — sandsynligvis 429 uden CORS-header`);
-        log.warn(`  Fejl: ${e.message}`);
-        log.warn(`  URL: ${url}`);
-        await countdown(waitSec, signal, s =>
-          updateRunStatus(`${label}: netværksfejl (muligvis rate-limit) — forsøg ${i+2}/${attempts} om ${s}s`)
-        );
-        continue;
-      }
-
-      log.error(`${attempt}: fejl — ${e.message}`);
-      log.error(`  URL: ${url}`);
-      throw new Error(`${label}: ${e.message}`);
-    }
-  }
-  throw new Error(`${label}: rate-limit efter ${attempts} forsøg — vent et par minutter og prøv igen`);
-}
-
-// Live countdown: ticks every second, calls onTick(remainingSeconds), abortable
-function countdown(seconds, signal, onTick) {
-  return new Promise((resolve, reject) => {
-    let remaining = seconds;
-    onTick?.(remaining);
-    const iv = setInterval(() => {
-      remaining--;
-      onTick?.(remaining);
-      if (remaining <= 0) { clearInterval(iv); resolve(); }
-    }, 1000);
-    signal?.addEventListener('abort', () => {
-      clearInterval(iv);
-      reject(new DOMException('Afbrudt', 'AbortError'));
-    }, { once: true });
-  });
-}
-
-// Safe day arithmetic: uses UTC noon to avoid DST ambiguity
-function offsetDay(isoDay, n) {
-  const d = new Date(`${isoDay}T12:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + n);
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+  // Backfill mangler — giv klar fejl uden at prøve live API
+  throw new Error(
+    `Spotpriser mangler for ${missingMonths.length} måned(er) i ${priceArea}: ${missingMonths.join(', ')}. ` +
+    `Backfill-action skal hente dem først (kører dagligt kl. 14:00 UTC, eller kan triggers manuelt fra GitHub Actions-fanen).`
+  );
 }
 
 // ─── Analysis ─────────────────────────────────────────────────────────────────
