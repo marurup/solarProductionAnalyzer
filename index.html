@@ -480,6 +480,10 @@
   </div>
 </div>
 
+<footer style="margin-top:40px; padding:16px 0; border-top:1px solid var(--border); text-align:center; font-size:0.78rem; color:var(--muted);">
+  <span id="versionInfo">Indlæser versionsinfo...</span>
+</footer>
+
 <div id="lightbox"><img id="lightboxImg" src="" alt="Forstørret billede"></div>
 
 <script>
@@ -1536,59 +1540,75 @@ async function applyQuickConfig() {
     const slPrices = slData.prices || [];
     if (!slPrices.length) throw new Error('Strømligning returnerede ingen priser');
 
-    // 2. Find dækkede dage
     const days = [...new Set(slPrices.map(p => p.localDate?.slice(0, 10)).filter(Boolean))].sort();
     if (!days.length) throw new Error('Kunne ikke udlede datoer fra Strømligning-svar');
 
-    // 3. Hent matchende spot fra vores egen cache (statisk fil + DayAheadPrices)
-    qcStatus.textContent = `Henter matchende spotpriser for ${days[0]} → ${days[days.length-1]}...`;
-    const spotMap = await fetchSpotPrices(days[0], days[days.length-1], cfg.priceArea, null);
+    // 2. Hent spot KUN fra lokal cache + statiske filer — undgå live EDS-kald (rate-limit på ~1/15min)
+    qcStatus.textContent = 'Slår spotpriser op i lokal cache...';
+    const cache = state.cache;
+    // Sørg for at relevante månedsfiler er læst ind i cache først
+    const months = [...new Set(days.map(d => d.slice(0,7)))];
+    for (const ym of months) await loadStaticMonth(cfg.priceArea, ym, cache, null);
+    const spotMap = await cache.getPrices(cfg.priceArea, days[0], days[days.length-1]);
 
-    // 4. Beregn overhead per time = strømligning.total - vores spot
-    let sumOverhead = 0, sumTotal = 0, sumSpot = 0;
-    let sumElectricity = 0, sumElectricityTax = 0, sumVat = 0;
-    let n = 0, missingSpot = 0;
+    // 3. Beregn overhead per time. Foretrækker præcis (total - spot), falder ellers tilbage til
+    //    approximation (total - electricity) som er "tariffer + elafgift inkl. moms".
+    let sumPrecise = 0, sumApprox = 0;
+    let sumTotal = 0, sumSpot = 0, sumElectricity = 0, sumElectricityTax = 0, sumVat = 0;
+    let nPrecise = 0, nApprox = 0;
 
     for (const p of slPrices) {
       const hourKey = p.localDate?.slice(0, 13);
       if (!hourKey) continue;
-      const spotOere = spotMap.get(hourKey);
-      if (spotOere == null) { missingSpot++; continue; }
 
       const totalOere       = (p.price?.total ?? 0) * 100;
       const vatOere         = (p.price?.vat ?? 0) * 100;
       const electricityOere = (p.details?.electricity?.total ?? 0) * 100;
+      const electricityVal  = (p.details?.electricity?.value ?? 0) * 100; // uden moms
       const elTaxOere       = (p.details?.electricityTax?.total ?? 0) * 100;
 
-      sumOverhead       += totalOere - spotOere;
       sumTotal          += totalOere;
-      sumSpot           += spotOere;
       sumElectricity    += electricityOere;
       sumElectricityTax += elTaxOere;
       sumVat            += vatOere;
-      n++;
+      // Approximation = total - electricity.total (tariffer+elafgift med moms, mangler kun moms-på-spot)
+      sumApprox += totalOere - electricityOere;
+      nApprox++;
+
+      const spotOere = spotMap.get(hourKey);
+      if (spotOere != null) {
+        sumPrecise += totalOere - spotOere;
+        sumSpot    += spotOere;
+        nPrecise++;
+      }
     }
 
-    if (n === 0) throw new Error('Ingen timer kunne matches med spotpris-cachen');
+    if (nApprox === 0) throw new Error('Ingen brugbare timer i Strømligning-svar');
 
-    const avgOverhead = Math.round(sumOverhead / n);
+    const isPrecise = nPrecise > 0;
+    const avgOverhead = Math.round(isPrecise ? sumPrecise / nPrecise : sumApprox / nApprox);
     const breakdown = {
-      n, missingSpot,
-      period: `${days[0]} → ${days[days.length-1]}`,
-      avgSpotOere:           sumSpot / n,
-      avgTotalOere:          sumTotal / n,
-      avgOverheadOere:       avgOverhead,
-      avgElectricityOere:    sumElectricity / n,
-      avgElectricityTaxOere: sumElectricityTax / n,
-      avgVatOere:            sumVat / n,
-      computedAt: new Date().toISOString(),
+      mode: isPrecise ? 'precise' : 'approximation',
+      n:                 isPrecise ? nPrecise : nApprox,
+      missingSpot:       nApprox - nPrecise,
+      period:            `${days[0]} → ${days[days.length-1]}`,
+      avgSpotOere:       isPrecise ? sumSpot / nPrecise : null,
+      avgTotalOere:      sumTotal / nApprox,
+      avgOverheadOere:   avgOverhead,
+      avgElectricityOere: sumElectricity / nApprox,
+      avgElectricityTaxOere: sumElectricityTax / nApprox,
+      avgVatOere:        sumVat / nApprox,
+      computedAt:        new Date().toISOString(),
     };
 
     document.getElementById('selfConsumpOverhead').value = avgOverhead;
     saveConfig({ overheadOere: avgOverhead, overheadBreakdown: breakdown });
+    updateCacheStatus(''); // ryd evt. resterende "Henter..."-tekst
 
-    qcStatus.style.color = 'var(--green)';
-    qcStatus.innerHTML = `✓ Overhead sat til <strong>${avgOverhead} øre/kWh</strong> (gennemsnit over ${n} timer). <a href="#" id="qcShowDetails" style="color:var(--accent)">Vis udregning</a>`;
+    qcStatus.style.color = isPrecise ? 'var(--green)' : 'var(--accent)';
+    qcStatus.innerHTML = isPrecise
+      ? `✓ Overhead sat til <strong>${avgOverhead} øre/kWh</strong> (præcis, ${nPrecise} timer med spot fra cache). <a href="#" id="qcShowDetails" style="color:var(--accent)">Vis udregning</a>`
+      : `⚠ Overhead sat til <strong>${avgOverhead} øre/kWh</strong> (approximation — ingen spot i cache endnu for de timer Strømligning leverede). <a href="#" id="qcShowDetails" style="color:var(--accent)">Vis udregning</a>`;
     document.getElementById('qcShowDetails').addEventListener('click', e => {
       e.preventDefault();
       const det = document.getElementById('overheadDetails');
@@ -1599,6 +1619,7 @@ async function applyQuickConfig() {
   } catch (e) {
     qcStatus.style.color = 'var(--red)';
     qcStatus.textContent = `Fejl: ${e.message}`;
+    updateCacheStatus('');
   }
 }
 
@@ -1610,26 +1631,43 @@ function renderOverheadBreakdown() {
 
   const fmt = v => (v == null ? '—' : v.toFixed(2).replace('.', ',') + ' øre/kWh');
   const avgOther = b.avgTotalOere - b.avgElectricityOere - b.avgElectricityTaxOere;
+  const isApprox = b.mode === 'approximation';
+
+  const formulaHtml = isApprox
+    ? `<strong>Formlen (approximation):</strong> overhead = <em>strømligning.total − strømligning.electricity.total</em>.<br>
+       Spot var ikke i lokal cache for denne periode — derfor bruger vi Strømlignings egen breakdown.
+       Dette giver "tariffer + elafgift inkl. moms" men <em>mangler moms på selve spotprisen</em>
+       (typisk 10-15 øre ekstra). Kør analysen først for at fylde cachen og få præcis udregning.`
+    : `<strong>Formlen:</strong> overhead = <em>strømligning.total − vores_spot</em>, gennemsnit over hver time.<br>
+       Det betyder "alt det du ville have betalt udover spotprisen, hvis du i stedet købte den kWh fra nettet" — nettarif, elafgift, leverandørtillæg, og moms på alt.`;
+
+  const spotRow = b.avgSpotOere != null
+    ? `<tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Vores spot (EDS, uden moms)</td><td>${fmt(b.avgSpotOere)}</td></tr>`
+    : `<tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Vores spot</td><td style="color:var(--accent)">— ikke i cache —</td></tr>`;
+
+  const lastRow = isApprox
+    ? `<tr><td colspan="2" style="padding:10px 0 6px 0; border-top:1px solid var(--border); color:var(--accent); font-weight:600;">
+         Overhead ≈ total − electricity = <strong>${fmt(b.avgOverheadOere)}</strong>
+       </td></tr>`
+    : `<tr><td colspan="2" style="padding:10px 0 6px 0; border-top:1px solid var(--border); color:var(--accent); font-weight:600;">
+         Overhead = total − spot = <strong>${fmt(b.avgOverheadOere)}</strong>
+       </td></tr>`;
 
   document.getElementById('overheadBreakdown').innerHTML = `
-    <p style="font-size:0.83rem; line-height:1.6; margin-bottom:10px;">
-      <strong>Formlen:</strong> overhead = <em>strømligning.total − vores_spot</em>, gennemsnit over hver time.<br>
-      Det betyder "alt det du ville have betalt udover spotprisen, hvis du i stedet købte den kWh fra nettet" — nettarif, elafgift, leverandørtillæg, og moms på alt.
-    </p>
+    <p style="font-size:0.83rem; line-height:1.6; margin-bottom:10px;">${formulaHtml}</p>
     <table style="width:100%; font-size:0.85rem; border-collapse:collapse;">
       <tr><td colspan="2" style="padding:6px 0; color:var(--muted); font-size:0.78rem;">PERIODE OG DÆKNING</td></tr>
       <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Periode</td><td>${b.period}</td></tr>
-      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Timer brugt</td><td>${b.n}${b.missingSpot ? ` (${b.missingSpot} sprunget over pga. manglende spot)` : ''}</td></tr>
+      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Timer brugt</td><td>${b.n}${b.missingSpot ? ` (${b.missingSpot} timer manglede spot)` : ''}</td></tr>
+      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Tilstand</td><td>${isApprox ? '<span style="color:var(--accent)">approximation</span>' : '<span style="color:var(--green)">præcis</span>'}</td></tr>
       <tr><td colspan="2" style="padding:10px 0 6px; color:var(--muted); font-size:0.78rem;">GENNEMSNIT PR. TIME</td></tr>
-      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Vores spot (EDS, uden moms)</td><td>${fmt(b.avgSpotOere)}</td></tr>
+      ${spotRow}
       <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Strømligning total (med moms)</td><td>${fmt(b.avgTotalOere)}</td></tr>
       <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">→ Heraf moms (25%)</td><td>${fmt(b.avgVatOere)}</td></tr>
       <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">→ Heraf electricity (spot+leverandør+moms)</td><td>${fmt(b.avgElectricityOere)}</td></tr>
       <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">→ Heraf elafgift (med moms)</td><td>${fmt(b.avgElectricityTaxOere)}</td></tr>
       <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">→ Heraf andet (transport, distribution m.m.)</td><td>${fmt(avgOther)}</td></tr>
-      <tr><td colspan="2" style="padding:10px 0 6px 0; border-top:1px solid var(--border); color:var(--accent); font-weight:600;">
-        Overhead = total − spot = <strong>${fmt(b.avgOverheadOere)}</strong>
-      </td></tr>
+      ${lastRow}
     </table>
     <p style="font-size:0.78rem; color:var(--muted); margin-top:10px;">
       Beregnet ${new Date(b.computedAt).toLocaleString('da-DK')}. Tariffer er stort set statiske — kun nettariffen varierer let med time-på-døgnet, men gennemsnittet over flere døgn er en god approximation.
@@ -1933,6 +1971,35 @@ document.getElementById('btnClearCache').addEventListener('click', async () => {
     const count = await state.cache.getDayCount(priceArea);
     updateCacheStatus(count > 0 ? `Cache: ${count} dage gemt (${priceArea})` : 'Cache: tom — data hentes fra API ved analyse');
   } catch { updateCacheStatus('Cache ikke tilgængelig'); }
+})();
+
+// Version-info: seneste commit fra GitHub API (caches 1 time i sessionStorage)
+(async function loadVersionInfo() {
+  const el = document.getElementById('versionInfo');
+  if (!el) return;
+  const CACHE_KEY = 'gh-version-info';
+  const TTL_MS = 3600000;
+  try {
+    const cached = sessionStorage.getItem(CACHE_KEY);
+    let data = null;
+    if (cached) {
+      const { fetchedAt, payload } = JSON.parse(cached);
+      if (Date.now() - new Date(fetchedAt).getTime() < TTL_MS) data = payload;
+    }
+    if (!data) {
+      const resp = await fetch('https://api.github.com/repos/marurup/solarProductionAnalyzer/commits/main');
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      data = await resp.json();
+      sessionStorage.setItem(CACHE_KEY, JSON.stringify({ fetchedAt: new Date().toISOString(), payload: data }));
+    }
+    const sha = (data.sha || '').slice(0, 7);
+    const date = data.commit?.author?.date ? new Date(data.commit.author.date) : null;
+    const dateStr = date ? date.toLocaleString('da-DK', { dateStyle: 'short', timeStyle: 'short' }) : '?';
+    const url = data.html_url || '#';
+    el.innerHTML = `Version: <a href="${url}" target="_blank" style="color:var(--accent); text-decoration:none">${sha}</a> · ${dateStr}`;
+  } catch (e) {
+    el.textContent = 'Version: ukendt';
+  }
 })();
 
 // Lightbox
