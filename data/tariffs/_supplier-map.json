@@ -1,14 +1,16 @@
 {
   "_meta": {
     "description": "Strømligning supplier_id → EDS GLN + ChargeTypeCode. consumptionCode = nettarif på forbrugs-siden. indfodningCode = nettarif på eksport-siden (kan være B-rate hvis netselskab ikke har separat C-kode).",
-    "generatedAt": "2026-05-27T12:18:39.680Z",
+    "generatedAt": "2026-05-27T12:19:23.978Z",
     "supplierCount": 35
   },
   "suppliers": {
     "n1_c": {
       "gln": "5790001089030",
-      "match": "exact",
-      "companyName": "N1 A/S - 131"
+      "consumptionCode": "CD",
+      "indfodningCode": "C INDF",
+      "companyName": "N1 A/S - 131",
+      "match": "exact"
     },
     "aal_el-net_c": {
       "gln": "5790001095451",

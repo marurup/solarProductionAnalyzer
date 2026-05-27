@@ -7,7 +7,7 @@
     "indfodningNote": "C-spec",
     "slSupplierId": "n1_344",
     "slCompanyName": "N1 A/S - 344",
-    "fetched": "2026-05-27T08:10:34.655Z"
+    "fetched": "2026-05-27T12:19:19.625Z"
   },
   "consumption": [
     {
@@ -7501,6 +7501,38 @@
     {
       "validFrom": "2024-09-14T00:00:00",
       "validTo": "2024-09-16T00:00:00",
+      "note": "Nettarif C flex, tidsdifferentieret",
+      "resolution": "PT1H",
+      "prices": [
+        0.1101,
+        0.1101,
+        0.1101,
+        0.1101,
+        0.1101,
+        0.1101,
+        0.1652,
+        0.1652,
+        0.1652,
+        0.1652,
+        0.1652,
+        0.1652,
+        0.1652,
+        0.1652,
+        0.1652,
+        0.1652,
+        0.1652,
+        0.4295,
+        0.4295,
+        0.4295,
+        0.4295,
+        0.1652,
+        0.1652,
+        0.1652
+      ]
+    },
+    {
+      "validFrom": "2024-09-09T00:00:00",
+      "validTo": "2024-09-14T00:00:00",
       "note": "Nettarif C flex, tidsdifferentieret",
       "resolution": "PT1H",
       "prices": [

@@ -3,9 +3,11 @@
     "gln": "5790001089030",
     "chargeOwner": "N1 A/S - 131",
     "consumptionCode": "CD",
-    "indfodningCode": "B1 INDF",
-    "note": "N1 bruger B1-rate til indf\u00f8dning ogs\u00e5 for C-kunder (ingen separat C-indf\u00f8dnings-tarif)",
-    "fetched": "2026-05-27T09:30:00Z"
+    "indfodningCode": "C INDF",
+    "indfodningNote": "C-spec",
+    "slSupplierId": "n1_c",
+    "slCompanyName": "N1 A/S - 131",
+    "fetched": "2026-05-27T12:19:23.977Z"
   },
   "consumption": [
     {
@@ -679,141 +681,13 @@
         0.227969,
         0.227969
       ]
-    },
-    {
-      "validFrom": "2022-01-01T00:00:00",
-      "validTo": "2022-04-01T00:00:00",
-      "note": "Nettarif C",
-      "resolution": "PT1H",
-      "prices": [
-        0.183226,
-        0.183226,
-        0.183226,
-        0.183226,
-        0.183226,
-        0.183226,
-        0.183226,
-        0.183226,
-        0.183226,
-        0.183226,
-        0.183226,
-        0.183226,
-        0.183226,
-        0.183226,
-        0.183226,
-        0.183226,
-        0.183226,
-        0.543732,
-        0.543732,
-        0.543732,
-        0.183226,
-        0.183226,
-        0.183226,
-        0.183226
-      ]
-    },
-    {
-      "validFrom": "2021-10-01T00:00:00",
-      "validTo": "2022-01-01T00:00:00",
-      "note": "Nettarif C",
-      "resolution": "PT1H",
-      "prices": [
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.5448,
-        0.5448,
-        0.5448,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717
-      ]
-    },
-    {
-      "validFrom": "2021-04-01T00:00:00",
-      "validTo": "2021-10-01T00:00:00",
-      "note": "Nettarif C",
-      "resolution": "PT1H",
-      "prices": [
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717
-      ]
-    },
-    {
-      "validFrom": "2021-01-01T00:00:00",
-      "validTo": "2021-04-01T00:00:00",
-      "note": "Nettarif C",
-      "resolution": "PT1H",
-      "prices": [
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.5448,
-        0.5448,
-        0.5448,
-        0.1717,
-        0.1717,
-        0.1717,
-        0.1717
-      ]
     }
   ],
   "indfodning": [
     {
       "validFrom": "2026-01-01T00:00:00",
       "validTo": null,
-      "note": "Nettarif indf\u00f8dning B h\u00f8j",
+      "note": "Nettarif indfødning C",
       "resolution": "P1D",
       "prices": [
         0.011157,
@@ -845,7 +719,7 @@
     {
       "validFrom": "2025-12-01T00:00:00",
       "validTo": "2026-01-01T00:00:00",
-      "note": "Nettarif indf\u00f8dning B h\u00f8j",
+      "note": "Nettarif indfødning C",
       "resolution": "P1D",
       "prices": [
         0.006721,
@@ -877,7 +751,7 @@
     {
       "validFrom": "2025-01-01T00:00:00",
       "validTo": "2025-12-01T00:00:00",
-      "note": "Nettarif indf\u00f8dning B h\u00f8j",
+      "note": "Nettarif indfødning C",
       "resolution": "P1D",
       "prices": [
         0.010996,
@@ -909,7 +783,7 @@
     {
       "validFrom": "2024-12-01T00:00:00",
       "validTo": "2025-01-01T00:00:00",
-      "note": "Nettarif indf\u00f8dning B h\u00f8j",
+      "note": "Nettarif indfødning C",
       "resolution": "P1D",
       "prices": [
         0.00069,
@@ -941,7 +815,7 @@
     {
       "validFrom": "2024-08-01T00:00:00",
       "validTo": "2024-12-01T00:00:00",
-      "note": "Nettarif indf\u00f8dning B h\u00f8j",
+      "note": "Nettarif indfødning C",
       "resolution": "P1D",
       "prices": [
         0.0153,
@@ -973,7 +847,7 @@
     {
       "validFrom": "2024-01-01T00:00:00",
       "validTo": "2024-08-01T00:00:00",
-      "note": "Nettarif indf\u00f8dning B h\u00f8j",
+      "note": "Nettarif indfødning C",
       "resolution": "P1D",
       "prices": [
         0.0153,
@@ -1005,7 +879,7 @@
     {
       "validFrom": "2023-08-01T00:00:00",
       "validTo": "2024-01-01T00:00:00",
-      "note": "Nettarif indf\u00f8dning B h\u00f8j",
+      "note": "Nettarif indfødning C",
       "resolution": "P1D",
       "prices": [
         0.012587,
@@ -1037,7 +911,7 @@
     {
       "validFrom": "2023-05-01T00:00:00",
       "validTo": "2023-08-01T00:00:00",
-      "note": "Nettarif indf\u00f8dning B h\u00f8j",
+      "note": "Nettarif indfødning C",
       "resolution": "P1D",
       "prices": [
         0.014992,
@@ -1069,7 +943,7 @@
     {
       "validFrom": "2023-01-01T00:00:00",
       "validTo": "2023-05-01T00:00:00",
-      "note": "Nettarif indf\u00f8dning B h\u00f8j",
+      "note": "Nettarif indfødning C",
       "resolution": "P1D",
       "prices": [
         0.052304,
