@@ -1,7 +1,7 @@
 {
   "_meta": {
     "description": "Strømligning supplier_id → EDS GLN + ChargeTypeCode. consumptionCode = nettarif på forbrugs-siden. indfodningCode = nettarif på eksport-siden (kan være B-rate hvis netselskab ikke har separat C-kode).",
-    "generatedAt": "2026-05-27T12:17:29.985Z",
+    "generatedAt": "2026-05-27T12:18:39.680Z",
     "supplierCount": 35
   },
   "suppliers": {

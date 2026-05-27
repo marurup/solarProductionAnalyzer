@@ -7,7 +7,7 @@
     "indfodningNote": "C-spec",
     "slSupplierId": "konstant_c_245",
     "slCompanyName": "Konstant Net A/S - 245",
-    "fetched": "2026-05-27T08:10:16.347Z"
+    "fetched": "2026-05-27T12:18:39.675Z"
   },
   "consumption": [
     {
@@ -7181,38 +7181,6 @@
     {
       "validFrom": "2024-04-20T00:00:00",
       "validTo": "2024-04-22T00:00:00",
-      "note": "Nettarif C time",
-      "resolution": "PT1H",
-      "prices": [
-        0.0826,
-        0.0826,
-        0.0826,
-        0.0826,
-        0.0826,
-        0.0826,
-        0.1239,
-        0.1239,
-        0.1239,
-        0.1239,
-        0.1239,
-        0.1239,
-        0.1239,
-        0.1239,
-        0.1239,
-        0.1239,
-        0.1239,
-        0.3222,
-        0.3222,
-        0.3222,
-        0.3222,
-        0.1239,
-        0.1239,
-        0.1239
-      ]
-    },
-    {
-      "validFrom": "2024-04-15T00:00:00",
-      "validTo": "2024-04-20T00:00:00",
       "note": "Nettarif C time",
       "resolution": "PT1H",
       "prices": [
