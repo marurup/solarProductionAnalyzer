@@ -7,7 +7,7 @@
     "indfodningNote": "C-spec",
     "slSupplierId": "nord_energi_net",
     "slCompanyName": "Nord Energi Net A/S",
-    "fetched": "2026-05-27T08:10:53.999Z"
+    "fetched": "2026-05-27T12:21:14.936Z"
   },
   "consumption": [
     {
@@ -18895,6 +18895,38 @@
     {
       "validFrom": "2026-03-12T00:00:00",
       "validTo": "2026-03-13T00:00:00",
+      "note": "Nettarif indfødning C",
+      "resolution": "PT1H",
+      "prices": [
+        0.0129,
+        0.0129,
+        0.0129,
+        0.0129,
+        0.0129,
+        0.0129,
+        0.0129,
+        0.0129,
+        0.0129,
+        0.0129,
+        0.0129,
+        0.0129,
+        0.0129,
+        0.0129,
+        0.0129,
+        0.0129,
+        0.0129,
+        0.0129,
+        0.0129,
+        0.0129,
+        0.0129,
+        0.0129,
+        0.0129,
+        0.0129
+      ]
+    },
+    {
+      "validFrom": "2026-03-11T00:00:00",
+      "validTo": "2026-03-12T00:00:00",
       "note": "Nettarif indfødning C",
       "resolution": "PT1H",
       "prices": [
