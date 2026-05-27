@@ -1,8 +1,8 @@
 {
   "_meta": {
     "description": "Strømligning supplier_id → EDS GLN + ChargeTypeCode. consumptionCode = nettarif på forbrugs-siden. indfodningCode = nettarif på eksport-siden (kan være B-rate hvis netselskab ikke har separat C-kode).",
-    "generatedAt": "2026-05-27T08:11:27.325Z",
-    "supplierCount": 32
+    "generatedAt": "2026-05-27T08:11:45.504Z",
+    "supplierCount": 35
   },
   "suppliers": {
     "n1_c": {
@@ -223,6 +223,27 @@
       "consumptionCode": "46",
       "indfodningCode": "57",
       "companyName": "TREFOR El-net Øst A/S",
+      "match": "exact"
+    },
+    "veksel": {
+      "gln": "5790001088217",
+      "consumptionCode": "NT-01",
+      "indfodningCode": "250",
+      "companyName": "Veksel A/S",
+      "match": "exact"
+    },
+    "vores_elnet": {
+      "gln": "5790000610976",
+      "consumptionCode": "TNT1011",
+      "indfodningCode": null,
+      "companyName": "Vores Elnet A/S",
+      "match": "exact"
+    },
+    "zeanet": {
+      "gln": "5790001089375",
+      "consumptionCode": "43110",
+      "indfodningCode": null,
+      "companyName": "Zeanet A/S",
       "match": "exact"
     }
   }
