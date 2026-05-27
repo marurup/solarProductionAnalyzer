@@ -1,8 +1,8 @@
 {
   "_meta": {
     "description": "Strømligning supplier_id → EDS GLN + ChargeTypeCode. consumptionCode = nettarif på forbrugs-siden. indfodningCode = nettarif på eksport-siden (kan være B-rate hvis netselskab ikke har separat C-kode).",
-    "generatedAt": "2026-05-27T08:09:23.683Z",
-    "supplierCount": 6
+    "generatedAt": "2026-05-27T08:09:45.974Z",
+    "supplierCount": 11
   },
   "suppliers": {
     "n1_c": {
@@ -46,6 +46,41 @@
       "indfodningCode": "6000121",
       "companyName": "Elektrus A/S",
       "match": "exact"
+    },
+    "elinor": {
+      "gln": "5790001095277",
+      "consumptionCode": "43300",
+      "indfodningCode": "44300",
+      "companyName": "Elinord A/S",
+      "match": "manual"
+    },
+    "elnet_midt_c": {
+      "gln": "5790001100520",
+      "consumptionCode": "T3001",
+      "indfodningCode": "33001",
+      "companyName": "Elnet Midt A/S",
+      "match": "exact"
+    },
+    "flow_elnet": {
+      "gln": "5790000392551",
+      "consumptionCode": "FE1 NT-01",
+      "indfodningCode": "FE1 IT",
+      "companyName": "FLOW Elnet A/S",
+      "match": "exact"
+    },
+    "forsyning_elnet": {
+      "gln": "5790001088309",
+      "consumptionCode": "STR-NT-03",
+      "indfodningCode": "740",
+      "companyName": "Forsyning Elnet A/S",
+      "match": "exact"
+    },
+    "gev_elnet_c": {
+      "gln": "5790000681105",
+      "consumptionCode": "GEV-NT-01",
+      "indfodningCode": null,
+      "companyName": "Grindsted Elnet A/S",
+      "match": "manual"
     }
   }
 }
