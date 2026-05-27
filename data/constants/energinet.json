@@ -1,21 +1,55 @@
 {
   "_meta": {
-    "description": "Energinets tariffer (kr/kWh ekskl. moms). Bruges både på forbrugs-siden (systemtarif + transmissionsnettarif) og på produktions-siden (indfødningstarif + balancetarif).",
-    "source": "EDS DatahubPricelist GLN 5790000432752 + Strømligning",
+    "description": "Energinets tariffer (kr/kWh ekskl. moms). consumption.systemTariff + consumption.transmissionNetTariff = 'Transmissionsudgifter til Energinet' på forbrugs-siden. production.indfodningstariff + production.balancetariff = Energinets fradrag på eksport-siden.",
+    "source": "EDS DatahubPricelist + Strømligning + Energinets fremskrivninger",
     "lastUpdated": "2026-05-27",
-    "note": "TODO: tilføj historiske rates 2021-2025 for alle felter"
+    "todoNote": "2024-2025 værdier er estimater baseret på sum-tal fra Energinets fremskrivninger (12,5 + 13,5 øre/kWh ekskl. moms). Fordeling mellem system+trans og indfødning+balance bør verificeres mod Energinets PDF'er. 2021-2023 mangler helt.",
+    "sources": [
+      "https://energinet.dk/media/oifh0mha/23-07493-5-publikationen-fremskrivning-af-energinets-eltariffer-2024-2026-1.pdf",
+      "https://energinet.dk/media/alpn1j0h/fremskrivning-af-energinets-eltariffer-2025-2027-1.pdf"
+    ]
   },
   "ranges": [
+    {
+      "validFrom": "2024-01-01",
+      "validTo": "2025-01-01",
+      "consumption": {
+        "systemTariff": 0.060,
+        "transmissionNetTariff": 0.040,
+        "_note": "estimat — sum 10,0 øre ekskl moms = 12,5 inkl moms (Energinets oplyste sum 2024)"
+      },
+      "production": {
+        "indfodningstariff": 0.005,
+        "balancetariff": 0.0053,
+        "_note": "estimat — antaget stabil ift. 2026"
+      }
+    },
+    {
+      "validFrom": "2025-01-01",
+      "validTo": "2026-01-01",
+      "consumption": {
+        "systemTariff": 0.065,
+        "transmissionNetTariff": 0.043,
+        "_note": "estimat — sum 10,8 øre ekskl moms = 13,5 inkl moms (Energinets oplyste sum 2025)"
+      },
+      "production": {
+        "indfodningstariff": 0.005,
+        "balancetariff": 0.0053,
+        "_note": "estimat — antaget stabil ift. 2026"
+      }
+    },
     {
       "validFrom": "2026-01-01",
       "validTo": null,
       "consumption": {
         "systemTariff": 0.072,
-        "transmissionNetTariff": 0.043
+        "transmissionNetTariff": 0.043,
+        "_note": "verificeret via Strømligning 2026-05"
       },
       "production": {
         "indfodningstariff": 0.005,
-        "balancetariff": 0.0053
+        "balancetariff": 0.0053,
+        "_note": "verificeret via EDS DatahubPricelist GLN 5790000432752"
       }
     }
   ]
