@@ -1,8 +1,8 @@
 {
   "_meta": {
     "description": "Strømligning supplier_id → EDS GLN + ChargeTypeCode. consumptionCode = nettarif på forbrugs-siden. indfodningCode = nettarif på eksport-siden (kan være B-rate hvis netselskab ikke har separat C-kode).",
-    "generatedAt": "2026-05-27T08:10:38.886Z",
-    "supplierCount": 21
+    "generatedAt": "2026-05-27T08:11:02.402Z",
+    "supplierCount": 27
   },
   "suppliers": {
     "n1_c": {
@@ -149,6 +149,46 @@
       "indfodningCode": "5NCFI",
       "companyName": "Netselskabet Elværk A/S",
       "match": "exact"
+    },
+    "netselskabet_elvaerk_c": {
+      "gln": "5790000681358",
+      "match": "fuzzy",
+      "companyName": "Netselskabet Elværk A/S - 042 - Udgået"
+    },
+    "nke-elnet": {
+      "gln": "5790001088231",
+      "consumptionCode": "94TR_C_ET",
+      "indfodningCode": "888300",
+      "companyName": "NKE-Elnet A/S",
+      "match": "manual"
+    },
+    "noe_net": {
+      "gln": "5790000395620",
+      "consumptionCode": "30030",
+      "indfodningCode": "10085",
+      "companyName": "NOE Net A/S",
+      "match": "exact"
+    },
+    "nord_energi_net": {
+      "gln": "5790000610877",
+      "consumptionCode": "TAC",
+      "indfodningCode": "TAPRODC",
+      "companyName": "Nord Energi Net A/S",
+      "match": "exact"
+    },
+    "radius_c": {
+      "gln": "5790000705689",
+      "consumptionCode": "DT_C_01",
+      "indfodningCode": "DT_C_I",
+      "companyName": "Radius Elnet A/S",
+      "match": "exact"
+    },
+    "rah_c": {
+      "gln": "5790000681327",
+      "consumptionCode": "RAH-C",
+      "indfodningCode": "INDF-CP",
+      "companyName": "RAH Net A/S",
+      "match": "fuzzy"
     }
   }
 }
