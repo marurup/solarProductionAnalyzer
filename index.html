@@ -611,6 +611,7 @@ const state = {
   sortCol: 'tabtFortjenesteDKK',
   sortDir: -1,
   cache: new SpotPriceCache(),
+  tariffData: null,   // {supplier, energinet, elafgift, markup} eller null hvis ikke aktiveret
 };
 
 const log = (() => {
@@ -901,11 +902,53 @@ function getTariffs() {
   };
 }
 
-function analyze(exportRows, spotPrices, tariffs) {
+// Find første record/range hvor validFrom <= dateStr < (validTo ?? infinity)
+function lookupByDate(items, dateStr) {
+  for (const it of items) {
+    const from = (it.validFrom || '').slice(0, 10);
+    const to   = it.validTo ? it.validTo.slice(0, 10) : null;
+    if (dateStr >= from && (to == null || dateStr < to)) return it;
+  }
+  return null;
+}
+
+// Returnerer alle tariff-komponenter for én time, alle i kr/kWh UDEN moms
+function lookupHourlyComponents(hourKey, tariffData) {
+  const dateStr = hourKey.slice(0, 10);
+  const hourOfDay = parseInt(hourKey.slice(11, 13), 10);
+  const out = { distribution: 0, systemTariff: 0, transmission: 0, elafgift: 0, markup: 0, dataComplete: true };
+
+  if (tariffData.supplier?.records?.length) {
+    const rec = lookupByDate(tariffData.supplier.records, dateStr);
+    if (rec) out.distribution = rec.prices[hourOfDay] || 0;
+    else out.dataComplete = false;
+  } else out.dataComplete = false;
+
+  if (tariffData.energinet?.ranges?.length) {
+    const r = lookupByDate(tariffData.energinet.ranges, dateStr);
+    if (r) { out.systemTariff = r.systemTariff || 0; out.transmission = r.transmissionNetTariff || 0; }
+    else out.dataComplete = false;
+  } else out.dataComplete = false;
+
+  if (tariffData.elafgift?.ranges?.length) {
+    const r = lookupByDate(tariffData.elafgift.ranges, dateStr);
+    if (r) out.elafgift = r.value || 0;
+    else out.dataComplete = false;
+  } else out.dataComplete = false;
+
+  if (tariffData.markup?.ranges?.length) {
+    const r = lookupByDate(tariffData.markup.ranges, dateStr);
+    if (r) out.markup = r.value || 0;
+  }
+  return out;
+}
+
+function analyze(exportRows, spotPrices, tariffs, tariffData) {
   const totalFradrag = tariffs.t1 + tariffs.t2 + tariffs.t3 + tariffs.t4;
   const results = [];
 
-  let missingPrices = 0;
+  const hasPerHourData = !!(tariffData?.supplier && tariffData?.energinet && tariffData?.elafgift);
+  let missingPrices = 0, incompleteRows = 0;
 
   for (const row of exportRows) {
     if (row.kwh <= 0) continue;
@@ -914,10 +957,21 @@ function analyze(exportRows, spotPrices, tariffs) {
 
     if (spotOere === undefined) { missingPrices++; continue; }
 
+    let selvforbrugVaerdi;
+    let breakdown = null;
+    if (hasPerHourData) {
+      const c = lookupHourlyComponents(row.hourKey, tariffData);
+      if (!c.dataComplete) incompleteRows++;
+      // Alle komponenter er uden moms (kr/kWh). consumer_price = (spot + alle) × 1,25
+      const tariffsExVatKr = c.distribution + c.systemTariff + c.transmission + c.elafgift + c.markup;
+      selvforbrugVaerdi = spotOere * 1.25 + tariffsExVatKr * 1.25 * 100; // → øre
+      breakdown = c;
+    } else {
+      // Fallback: brug manuel "Tariff-overhead"-felt
+      selvforbrugVaerdi = spotOere * 1.25 + tariffs.selfConsumpOverhead;
+    }
+
     const nettoEksportOere = spotOere - totalFradrag;
-    // Selvforbrugs-værdi: hvad du sparer ved at bruge kWh'en selv = consumer-prisen fra nettet
-    //   = spot × 1,25 (moms på spot) + tariff_overhead (alle øvrige omkostninger inkl. moms)
-    const selvforbrugVaerdi = spotOere * 1.25 + tariffs.selfConsumpOverhead;
     const tabtFortjenesteDKK = Math.max(0, (selvforbrugVaerdi - nettoEksportOere) * row.kwh / 100);
 
     results.push({
@@ -934,6 +988,11 @@ function analyze(exportRows, spotPrices, tariffs) {
   }
 
   if (missingPrices) log.warn(`${missingPrices} eksport-timer manglede spotpris (typisk DST-overgange eller manglende API-data)`);
+  if (hasPerHourData) {
+    log.info(`Per-time tariff-opslag aktiv (${results.length} timer behandlet${incompleteRows ? `, ${incompleteRows} timer havde ufuldstændige tariff-data` : ''})`);
+  } else {
+    log.info(`Bruger manuel 'Tariff-overhead' (${tariffs.selfConsumpOverhead} øre/kWh) — netselskab har ingen historisk tariff-data endnu`);
+  }
 
   return results;
 }
@@ -1300,6 +1359,49 @@ supplierSelect.addEventListener('change', onSupplierChange);
 companySelect.addEventListener('change', onCompanyChange);
 productSelect.addEventListener('change', onProductChange);
 
+// ─── Statisk tariff-data: indlæs supplier-map + per-netselskab + constants ───
+
+async function loadStaticTariffData(supplierId) {
+  try {
+    const mapResp = await fetch('data/tariffs/_supplier-map.json', { cache: 'no-cache' });
+    if (!mapResp.ok) return null;
+    const map = await mapResp.json();
+    const sup = map.suppliers?.[supplierId];
+    if (!sup) {
+      log.info(`Netselskab ${supplierId} har ikke historisk tariff-data endnu — bruger manuel overhead`);
+      return null;
+    }
+    const [tariffResp, eneResp, taxResp] = await Promise.all([
+      fetch(`data/tariffs/${sup.gln}.json`, { cache: 'no-cache' }),
+      fetch('data/constants/energinet.json', { cache: 'no-cache' }),
+      fetch('data/constants/elafgift.json', { cache: 'no-cache' }),
+    ]);
+    if (!tariffResp.ok || !eneResp.ok || !taxResp.ok) return null;
+    const [supplier, energinet, elafgift] = await Promise.all([
+      tariffResp.json(), eneResp.json(), taxResp.json(),
+    ]);
+    log.info(`Tariff-data indlæst: ${sup.companyName} (${supplier.records.length} historiske perioder)`);
+    return { supplier, energinet, elafgift, mapEntry: sup };
+  } catch (e) {
+    log.warn(`Kunne ikke indlæse statisk tariff-data: ${e.message}`);
+    return null;
+  }
+}
+
+function buildMarkupRanges(product) {
+  return (product?.prices || [])
+    .filter(p => {
+      const name = (p.name || '').toLowerCase();
+      return (name.includes('tillæg') || name.includes('tillaeg')) && p.enabled !== false;
+    })
+    .map(p => ({
+      validFrom: p.fromDate || '2000-01-01T00:00:00Z',
+      validTo:   p.toDate || null,
+      value:     p.amount || 0,
+    }))
+    .sort((a, b) => (b.validFrom).localeCompare(a.validFrom));
+}
+
 // ─── Anvend konfiguration: hent priser, beregn overhead ──────────────────────
 
 async function applyQuickConfig() {
@@ -1379,8 +1481,20 @@ async function applyQuickConfig() {
     document.getElementById('selfConsumpOverhead').value = avgOverhead;
     saveConfig({ overheadOere: avgOverhead, overheadBreakdown: breakdown });
 
+    // Indlæs statisk tariff-data for per-time analyse. Hvis netselskab er backfillet,
+    // bruges historiske rates i stedet for det statiske gennemsnit i overhead-feltet.
+    const staticData = await loadStaticTariffData(cfg.supplierId);
+    if (staticData) {
+      const markup = { ranges: buildMarkupRanges(product) };
+      state.tariffData = { ...staticData, markup };
+      log.info(`Per-time tariff-opslag aktiveret for ${staticData.mapEntry.companyName}`);
+    } else {
+      state.tariffData = null;
+    }
+
     qcStatus.style.color = 'var(--green)';
-    qcStatus.innerHTML = `✓ Tariff-overhead sat til <strong>${avgOverhead} øre/kWh</strong> (sum af komponenter over ${n} kvartérer). <a href="#" id="qcShowDetails" style="color:var(--accent)">Vis udregning</a>`;
+    const perHourBadge = staticData ? ' <span style="background:rgba(34,197,94,0.2); color:var(--green); padding:1px 6px; border-radius:3px; font-size:0.75rem;">per-time aktiv</span>' : '';
+    qcStatus.innerHTML = `✓ Tariff-overhead sat til <strong>${avgOverhead} øre/kWh</strong> (gns. over ${n} kvartérer)${perHourBadge}. <a href="#" id="qcShowDetails" style="color:var(--accent)">Vis udregning</a>`;
     document.getElementById('qcShowDetails').addEventListener('click', e => {
       e.preventDefault();
       const det = document.getElementById('overheadDetails');
@@ -1475,6 +1589,17 @@ btnApply.addEventListener('click', applyQuickConfig);
     } catch {}
   }
   if (cfg.priceArea) await populateSuppliers(cfg.priceArea, null, foundList);
+
+  // Indlæs statisk tariff-data hvis brugeren har valgt en supplier + et produkt
+  if (cfg.supplierId && cfg.productId) {
+    const staticData = await loadStaticTariffData(cfg.supplierId);
+    if (staticData) {
+      const cs = window._slCompanies || [];
+      const product = cs.find(c => c._id === cfg.companyId)?.products?.find(p => p.id === cfg.productId);
+      const markup = { ranges: buildMarkupRanges(product) };
+      state.tariffData = { ...staticData, markup };
+    }
+  }
 
   renderAutoDiscoveryStatus();
   if (cfg.overheadBreakdown) renderOverheadBreakdown();
@@ -1679,7 +1804,7 @@ document.getElementById('btnAnalyze').addEventListener('click', async () => {
     state.spotPrices = spotPrices;
 
     statusText.textContent = 'Analyserer data...';
-    const data = analyze(rows, spotPrices, tariffs);
+    const data = analyze(rows, spotPrices, tariffs, state.tariffData);
     state.analysisData = data;
 
     statusText.textContent = `Analyse færdig — ${data.length} timer analyseret`;
