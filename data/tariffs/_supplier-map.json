@@ -1,8 +1,8 @@
 {
   "_meta": {
     "description": "Strømligning supplier_id → EDS GLN + ChargeTypeCode. consumptionCode = nettarif på forbrugs-siden. indfodningCode = nettarif på eksport-siden (kan være B-rate hvis netselskab ikke har separat C-kode).",
-    "generatedAt": "2026-05-27T08:11:02.402Z",
-    "supplierCount": 27
+    "generatedAt": "2026-05-27T08:11:27.325Z",
+    "supplierCount": 32
   },
   "suppliers": {
     "n1_c": {
@@ -189,6 +189,41 @@
       "indfodningCode": "INDF-CP",
       "companyName": "RAH Net A/S",
       "match": "fuzzy"
+    },
+    "ravdex": {
+      "gln": "5790000836727",
+      "consumptionCode": "NT-C",
+      "indfodningCode": "INDC",
+      "companyName": "Ravdex A/S",
+      "match": "exact"
+    },
+    "sunds_net": {
+      "gln": "5790001095444",
+      "consumptionCode": "SEF-NT-05",
+      "indfodningCode": "SEF-NT-31",
+      "companyName": "Sunds Net A.m.b.a",
+      "match": "exact"
+    },
+    "tarm_elværk_net_as": {
+      "gln": "5790000706419",
+      "consumptionCode": "TEV-NT-01T",
+      "indfodningCode": null,
+      "companyName": "Tarm Elværk Net A/S",
+      "match": "exact"
+    },
+    "trefor_el-net_c": {
+      "gln": "5790000392261",
+      "consumptionCode": "C",
+      "indfodningCode": "IFC",
+      "companyName": "TREFOR El-net A/S",
+      "match": "exact"
+    },
+    "trefor_el-net_oest_c": {
+      "gln": "5790000706686",
+      "consumptionCode": "46",
+      "indfodningCode": "57",
+      "companyName": "TREFOR El-net Øst A/S",
+      "match": "exact"
     }
   }
 }
