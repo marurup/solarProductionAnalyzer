@@ -1,8 +1,8 @@
 {
   "_meta": {
     "description": "Strømligning supplier_id → EDS GLN + ChargeTypeCode. consumptionCode = nettarif på forbrugs-siden. indfodningCode = nettarif på eksport-siden (kan være B-rate hvis netselskab ikke har separat C-kode).",
-    "generatedAt": "2026-05-27T08:09:45.974Z",
-    "supplierCount": 11
+    "generatedAt": "2026-05-27T08:10:16.350Z",
+    "supplierCount": 16
   },
   "suppliers": {
     "n1_c": {
@@ -81,6 +81,41 @@
       "indfodningCode": null,
       "companyName": "Grindsted Elnet A/S",
       "match": "manual"
+    },
+    "hammel_elforsyning_net_as": {
+      "gln": "5790001090166",
+      "consumptionCode": "C-Tarif",
+      "indfodningCode": null,
+      "companyName": "Hammel Elforsyning Net A/S",
+      "match": "exact"
+    },
+    "hjerting_transformatorforening": {
+      "gln": "5790001095376",
+      "consumptionCode": "HE-NT-01",
+      "indfodningCode": null,
+      "companyName": "Hjerting Transformatorforening",
+      "match": "exact"
+    },
+    "ikast_el_net_as_c": {
+      "gln": "5790000682102",
+      "consumptionCode": "IEV-NT-01",
+      "indfodningCode": "27",
+      "companyName": "Ikast El Net A/S",
+      "match": "exact"
+    },
+    "konstant_c": {
+      "gln": "5790000704842",
+      "consumptionCode": "151-NT01T",
+      "indfodningCode": "INF_NT_C",
+      "companyName": "Konstant Net A/S - 151",
+      "match": "exact"
+    },
+    "konstant_c_245": {
+      "gln": "5790000683345",
+      "consumptionCode": "245-NT01T",
+      "indfodningCode": "INF_NT_C",
+      "companyName": "Konstant Net A/S - 245",
+      "match": "exact"
     }
   }
 }
