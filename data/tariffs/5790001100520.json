@@ -7,7 +7,7 @@
     "indfodningNote": "C-spec",
     "slSupplierId": "elnet_midt_c",
     "slCompanyName": "Elnet Midt A/S",
-    "fetched": "2026-05-27T08:09:33.915Z"
+    "fetched": "2026-05-27T12:17:18.074Z"
   },
   "consumption": [
     {
@@ -37133,38 +37133,6 @@
     {
       "validFrom": "2023-10-27T00:00:00",
       "validTo": "2023-10-28T00:00:00",
-      "note": "Nettarif C",
-      "resolution": "PT1H",
-      "prices": [
-        0.095,
-        0.095,
-        0.095,
-        0.095,
-        0.095,
-        0.095,
-        0.285,
-        0.285,
-        0.285,
-        0.285,
-        0.285,
-        0.285,
-        0.285,
-        0.285,
-        0.285,
-        0.285,
-        0.285,
-        0.8551,
-        0.8551,
-        0.8551,
-        0.8551,
-        0.285,
-        0.285,
-        0.285
-      ]
-    },
-    {
-      "validFrom": "2023-10-26T00:00:00",
-      "validTo": "2023-10-27T00:00:00",
       "note": "Nettarif C",
       "resolution": "PT1H",
       "prices": [
