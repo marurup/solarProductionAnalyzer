@@ -1,65 +1,178 @@
 {
   "_meta": {
-    "description": "Energinets tariffer (kr/kWh ekskl. moms) fra EDS DatahubPricelist GLN 5790000432752 (Energinet Systemansvar A/S/SYO). Koder: 41000 (systemtarif), 40000 (transmissionsnettarif), 40010 (indfødningstarif), 45012 (balancetarif produktion).",
+    "description": "Energinets tariffer fra EDS DatahubPricelist GLN 5790000432752. Komponenter: 41000 systemtarif + 40000 transmissionsnettarif (forbrug), 40010 indfødnings + 45012 balance (produktion). Alle i kr/kWh ekskl. moms.",
     "source": "EDS DatahubPricelist",
     "sourceGln": "5790000432752",
-    "lastUpdated": "2026-05-27",
-    "note": "Backfill kan re-genereres via scripts/fetch-energinet.mjs"
+    "lastUpdated": "2026-05-27T12:15:25.586Z"
   },
   "ranges": [
     {
-      "validFrom": "2020-01-01",
-      "validTo": "2021-01-01",
-      "consumption": { "systemTariff": 0.044, "transmissionNetTariff": 0.053 },
-      "production":  { "indfodningstariff": 0.003, "balancetariff": 0.00112 }
+      "validFrom": "2015-01-01T00:00:00",
+      "validTo": "2016-01-01T00:00:00",
+      "consumption": {
+        "systemTariff": 0.029,
+        "transmissionNetTariff": 0.042
+      },
+      "production": {
+        "indfodningstariff": 0.003,
+        "balancetariff": 0.00059
+      }
     },
     {
-      "validFrom": "2021-01-01",
-      "validTo": "2022-01-01",
-      "consumption": { "systemTariff": 0.061, "transmissionNetTariff": 0.049 },
-      "production":  { "indfodningstariff": 0.003, "balancetariff": 0.00123 }
+      "validFrom": "2016-01-01T00:00:00",
+      "validTo": "2017-01-01T00:00:00",
+      "consumption": {
+        "systemTariff": 0.039,
+        "transmissionNetTariff": 0.043
+      },
+      "production": {
+        "indfodningstariff": 0.003,
+        "balancetariff": 0.00059
+      }
     },
     {
-      "validFrom": "2022-01-01",
-      "validTo": "2023-01-01",
-      "consumption": { "systemTariff": 0.061, "transmissionNetTariff": 0.049 },
-      "production":  { "indfodningstariff": 0.003, "balancetariff": 0.00116 }
+      "validFrom": "2017-01-01T00:00:00",
+      "validTo": "2018-01-01T00:00:00",
+      "consumption": {
+        "systemTariff": 0.024,
+        "transmissionNetTariff": 0.059
+      },
+      "production": {
+        "indfodningstariff": 0.003,
+        "balancetariff": 0.00059
+      }
     },
     {
-      "validFrom": "2023-01-01",
-      "validTo": "2023-09-30",
-      "consumption": { "systemTariff": 0.054, "transmissionNetTariff": 0.058 },
-      "production":  { "indfodningstariff": 0.003, "balancetariff": 0.0016 }
+      "validFrom": "2018-01-01T00:00:00",
+      "validTo": "2019-01-01T00:00:00",
+      "consumption": {
+        "systemTariff": 0.042,
+        "transmissionNetTariff": 0.038
+      },
+      "production": {
+        "indfodningstariff": 0.003,
+        "balancetariff": 0.00069
+      }
     },
     {
-      "validFrom": "2023-09-30",
-      "validTo": "2024-01-01",
-      "consumption": { "systemTariff": 0.054, "transmissionNetTariff": 0.058 },
-      "production":  { "indfodningstariff": 0.003, "balancetariff": 0.0016 }
+      "validFrom": "2019-01-01T00:00:00",
+      "validTo": "2020-01-01T00:00:00",
+      "consumption": {
+        "systemTariff": 0.036,
+        "transmissionNetTariff": 0.044
+      },
+      "production": {
+        "indfodningstariff": 0.003,
+        "balancetariff": 0.00086
+      }
     },
     {
-      "validFrom": "2024-01-01",
-      "validTo": "2024-07-01",
-      "consumption": { "systemTariff": 0.051, "transmissionNetTariff": 0.074 },
-      "production":  { "indfodningstariff": 0.003, "balancetariff": 0.0024 }
+      "validFrom": "2020-01-01T00:00:00",
+      "validTo": "2021-01-01T00:00:00",
+      "consumption": {
+        "systemTariff": 0.044,
+        "transmissionNetTariff": 0.053
+      },
+      "production": {
+        "indfodningstariff": 0.003,
+        "balancetariff": 0.00112
+      }
     },
     {
-      "validFrom": "2024-07-01",
-      "validTo": "2025-01-01",
-      "consumption": { "systemTariff": 0.051, "transmissionNetTariff": 0.074 },
-      "production":  { "indfodningstariff": 0.000, "balancetariff": 0.0024 }
+      "validFrom": "2021-01-01T00:00:00",
+      "validTo": "2022-01-01T00:00:00",
+      "consumption": {
+        "systemTariff": 0.061,
+        "transmissionNetTariff": 0.049
+      },
+      "production": {
+        "indfodningstariff": 0.003,
+        "balancetariff": 0.00123
+      }
     },
     {
-      "validFrom": "2025-01-01",
-      "validTo": "2026-01-01",
-      "consumption": { "systemTariff": 0.074, "transmissionNetTariff": 0.061 },
-      "production":  { "indfodningstariff": 0.005, "balancetariff": 0.0065 }
+      "validFrom": "2022-01-01T00:00:00",
+      "validTo": "2023-01-01T00:00:00",
+      "consumption": {
+        "systemTariff": 0.061,
+        "transmissionNetTariff": 0.049
+      },
+      "production": {
+        "indfodningstariff": 0.003,
+        "balancetariff": 0.00116
+      }
     },
     {
-      "validFrom": "2026-01-01",
+      "validFrom": "2023-01-01T00:00:00",
+      "validTo": "2023-09-30T00:00:00",
+      "consumption": {
+        "systemTariff": 0.054,
+        "transmissionNetTariff": 0.058
+      },
+      "production": {
+        "indfodningstariff": 0.003,
+        "balancetariff": 0.0016
+      }
+    },
+    {
+      "validFrom": "2023-09-30T00:00:00",
+      "validTo": "2024-01-01T00:00:00",
+      "consumption": {
+        "systemTariff": 0.054,
+        "transmissionNetTariff": 0.058
+      },
+      "production": {
+        "indfodningstariff": 0.003,
+        "balancetariff": 0.0016
+      }
+    },
+    {
+      "validFrom": "2024-01-01T00:00:00",
+      "validTo": "2024-07-01T00:00:00",
+      "consumption": {
+        "systemTariff": 0.051,
+        "transmissionNetTariff": 0.074
+      },
+      "production": {
+        "indfodningstariff": 0.003,
+        "balancetariff": 0.0024
+      }
+    },
+    {
+      "validFrom": "2024-07-01T00:00:00",
+      "validTo": "2025-01-01T00:00:00",
+      "consumption": {
+        "systemTariff": 0.051,
+        "transmissionNetTariff": 0.074
+      },
+      "production": {
+        "indfodningstariff": 0,
+        "balancetariff": 0.0024
+      }
+    },
+    {
+      "validFrom": "2025-01-01T00:00:00",
+      "validTo": "2026-01-01T00:00:00",
+      "consumption": {
+        "systemTariff": 0.074,
+        "transmissionNetTariff": 0.061
+      },
+      "production": {
+        "indfodningstariff": 0.005,
+        "balancetariff": 0.0065
+      }
+    },
+    {
+      "validFrom": "2026-01-01T00:00:00",
       "validTo": null,
-      "consumption": { "systemTariff": 0.072, "transmissionNetTariff": 0.043 },
-      "production":  { "indfodningstariff": 0.005, "balancetariff": 0.0053 }
+      "consumption": {
+        "systemTariff": 0.072,
+        "transmissionNetTariff": 0.043
+      },
+      "production": {
+        "indfodningstariff": 0.005,
+        "balancetariff": 0.0053
+      }
     }
   ]
 }

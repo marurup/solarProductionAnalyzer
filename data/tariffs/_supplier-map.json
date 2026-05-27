@@ -1,7 +1,7 @@
 {
   "_meta": {
     "description": "Strømligning supplier_id → EDS GLN + ChargeTypeCode. consumptionCode = nettarif på forbrugs-siden. indfodningCode = nettarif på eksport-siden (kan være B-rate hvis netselskab ikke har separat C-kode).",
-    "generatedAt": "2026-05-27T08:11:45.504Z",
+    "generatedAt": "2026-05-27T12:15:51.566Z",
     "supplierCount": 35
   },
   "suppliers": {
@@ -12,7 +12,7 @@
     },
     "aal_el-net_c": {
       "gln": "5790001095451",
-      "consumptionCode": "AAL-NT-05",
+      "consumptionCode": "AAL-NTR05",
       "indfodningCode": null,
       "companyName": "Aal El-Net A M B A",
       "match": "exact"

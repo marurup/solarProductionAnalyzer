@@ -1,24 +1,101 @@
 {
   "_meta": {
-    "description": "Statslig elafgift (kr/kWh ekskl. moms) fra EDS DatahubPricelist GLN 5790000432752 ChargeTypeCode EA-001 (normal sats).",
+    "description": "Statslig elafgift (kr/kWh ekskl. moms) fra EDS DatahubPricelist GLN 5790000432752 ChargeTypeCode EA-001.",
     "source": "EDS DatahubPricelist",
     "sourceGln": "5790000432752",
     "sourceCode": "EA-001",
-    "lastUpdated": "2026-05-27",
-    "note": "Backfill kan re-genereres via scripts/fetch-energinet.mjs"
+    "lastUpdated": "2026-05-27T12:15:25.595Z"
   },
   "ranges": [
-    { "validFrom": "2018-01-01", "validTo": "2019-01-01", "value": 0.9140 },
-    { "validFrom": "2019-01-01", "validTo": "2020-01-01", "value": 0.8840 },
-    { "validFrom": "2020-01-01", "validTo": "2021-01-01", "value": 0.8920 },
-    { "validFrom": "2021-01-01", "validTo": "2022-01-01", "value": 0.9000 },
-    { "validFrom": "2022-01-01", "validTo": "2022-07-01", "value": 0.9030 },
-    { "validFrom": "2022-07-01", "validTo": "2022-10-01", "value": 0.7630 },
-    { "validFrom": "2022-10-01", "validTo": "2023-01-01", "value": 0.7230 },
-    { "validFrom": "2023-01-01", "validTo": "2023-07-01", "value": 0.0080 },
-    { "validFrom": "2023-07-01", "validTo": "2024-01-01", "value": 0.6970 },
-    { "validFrom": "2024-01-01", "validTo": "2025-01-01", "value": 0.7610 },
-    { "validFrom": "2025-01-01", "validTo": "2026-01-01", "value": 0.7200 },
-    { "validFrom": "2026-01-01", "validTo": null,         "value": 0.0080 }
+    {
+      "validFrom": "2026-01-01T00:00:00",
+      "validTo": null,
+      "value": 0.008,
+      "note": "Elafgift"
+    },
+    {
+      "validFrom": "2025-01-01T00:00:00",
+      "validTo": "2026-01-01T00:00:00",
+      "value": 0.72,
+      "note": "Elafgift"
+    },
+    {
+      "validFrom": "2024-01-01T00:00:00",
+      "validTo": "2025-01-01T00:00:00",
+      "value": 0.761,
+      "note": "Elafgift"
+    },
+    {
+      "validFrom": "2023-07-01T00:00:00",
+      "validTo": "2024-01-01T00:00:00",
+      "value": 0.697,
+      "note": "Elafgift"
+    },
+    {
+      "validFrom": "2023-01-01T00:00:00",
+      "validTo": "2023-07-01T00:00:00",
+      "value": 0.008,
+      "note": "Elafgift"
+    },
+    {
+      "validFrom": "2022-10-01T00:00:00",
+      "validTo": "2023-01-01T00:00:00",
+      "value": 0.723,
+      "note": "Elafgift"
+    },
+    {
+      "validFrom": "2022-07-01T00:00:00",
+      "validTo": "2022-10-01T00:00:00",
+      "value": 0.763,
+      "note": "Elafgift"
+    },
+    {
+      "validFrom": "2022-01-01T00:00:00",
+      "validTo": "2022-07-01T00:00:00",
+      "value": 0.903,
+      "note": "Elafgift"
+    },
+    {
+      "validFrom": "2021-01-01T00:00:00",
+      "validTo": "2022-01-01T00:00:00",
+      "value": 0.9,
+      "note": "Elafgift"
+    },
+    {
+      "validFrom": "2020-01-01T00:00:00",
+      "validTo": "2021-01-01T00:00:00",
+      "value": 0.892,
+      "note": "Elafgift"
+    },
+    {
+      "validFrom": "2019-01-01T00:00:00",
+      "validTo": "2020-01-01T00:00:00",
+      "value": 0.884,
+      "note": "Elafgift"
+    },
+    {
+      "validFrom": "2018-01-01T00:00:00",
+      "validTo": "2019-01-01T00:00:00",
+      "value": 0.914,
+      "note": "Elafgift"
+    },
+    {
+      "validFrom": "2017-01-01T00:00:00",
+      "validTo": "2018-01-01T00:00:00",
+      "value": 0.91,
+      "note": "Elafgift"
+    },
+    {
+      "validFrom": "2016-01-01T00:00:00",
+      "validTo": "2017-01-01T00:00:00",
+      "value": 0.885,
+      "note": "Elafgift"
+    },
+    {
+      "validFrom": "2015-01-01T00:00:00",
+      "validTo": "2016-01-01T00:00:00",
+      "value": 0.878,
+      "note": "Elafgift"
+    }
   ]
 }
