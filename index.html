@@ -1534,38 +1534,133 @@ function renderOverheadBreakdown() {
   const cfg = loadConfig();
   const b = cfg.overheadBreakdown;
   const det = document.getElementById('overheadDetails');
-  if (!det || !b) return;
+  if (!det) return;
 
-  const fmt = v => (v == null ? '—' : v.toFixed(2).replace('.', ',') + ' øre/kWh');
-  const sumStatic = (b.avgSystemTariffOere + b.avgNetTariffOere + b.avgElectricityTaxOere + b.avgSurchargeOere + b.markupOereVat);
+  const fmt = v => (v == null ? '—' : v.toFixed(3).replace('.', ',') + ' øre/kWh');
+  const fmtKr = v => (v == null ? '—' : v.toFixed(5).replace('.', ',') + ' kr/kWh');
 
-  document.getElementById('overheadBreakdown').innerHTML = `
-    <p style="font-size:0.83rem; line-height:1.6; margin-bottom:10px;">
-      <strong>Tariff-overhead</strong> = summen af de omkostninger der ligger ovenpå spotprisen, alle med moms.
-      Hentet direkte fra Strømlignings strukturerede breakdown (uden at røre spot — den kommer fra EDS).<br>
-      I analysen: <em>selvforbrugsværdi(t) = spot(t) × 1,25 + tariff-overhead</em>
-    </p>
-    <table style="width:100%; font-size:0.85rem; border-collapse:collapse;">
-      <tr><td colspan="2" style="padding:6px 0; color:var(--muted); font-size:0.78rem;">PERIODE OG OPSLAG</td></tr>
-      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Periode</td><td>${b.period}</td></tr>
-      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Datapunkter (kvartérer)</td><td>${b.n}</td></tr>
-      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Produkt</td><td>${b.productName || '—'}</td></tr>
-      <tr><td colspan="2" style="padding:12px 0 6px; color:var(--muted); font-size:0.78rem;">KOMPONENTER (GNS. ØRE/kWh MED MOMS)</td></tr>
-      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Energinet systemtarif</td><td>${fmt(b.avgSystemTariffOere)}</td></tr>
-      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Energinet nettarif (transmission)</td><td>${fmt(b.avgNetTariffOere)}</td></tr>
-      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Netselskab distribution (tidsvarierende, gns.)</td><td>${fmt(b.avgDistributionOere)}</td></tr>
-      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Elafgift</td><td>${fmt(b.avgElectricityTaxOere)}</td></tr>
-      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Tillæg / surcharge</td><td>${fmt(b.avgSurchargeOere)}</td></tr>
-      <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Leverandørtillæg ${b.tillaegName ? `(${b.tillaegName})` : ''}</td><td>${fmt(b.markupOereVat)}</td></tr>
-      <tr><td colspan="2" style="padding:10px 0 6px 0; border-top:1px solid var(--border); color:var(--accent); font-weight:600;">
-        Tariff-overhead = <strong>${fmt(b.avgOverheadOere)}</strong>
-      </td></tr>
-    </table>
-    <p style="font-size:0.78rem; color:var(--muted); margin-top:10px;">
-      Beregnet ${new Date(b.computedAt).toLocaleString('da-DK')}. Distribution varierer per time-på-døgnet (lavlast/højlast/spidslast) — vi bruger gennemsnittet over Strømligning's leverede kvartérer. Faste komponenter (Energinet, elafgift, markup) ændres typisk kun årligt.
-    </p>
-  `;
+  // Hvis per-time tariff-data er aktiveret: vis HVAD ANALYSEN FAKTISK BRUGER.
+  // Ellers: vis Strømlignings gennemsnit som tidligere (fallback).
+  const td = state.tariffData;
+  let html = '';
+
+  if (td?.supplier && td?.energinet && td?.elafgift) {
+    const today = new Date().toISOString().slice(0, 10);
+    const cons = lookupByDate(td.supplier.consumption || [], today);
+    const indf = lookupByDate(td.supplier.indfodning || [], today);
+    const ene  = lookupByDate(td.energinet.ranges || [], today);
+    const tax  = lookupByDate(td.elafgift.ranges || [], today);
+    const mk   = lookupByDate(td.markup?.ranges || [], today);
+
+    const consHours = cons ? cons.prices.map(p => p * 1.25 * 100) : Array(24).fill(0);
+    const consMin = Math.min(...consHours), consMax = Math.max(...consHours);
+    const buckets = {};
+    consHours.forEach((v, i) => { (buckets[v.toFixed(3)] = buckets[v.toFixed(3)] || []).push(i); });
+
+    const eneCons = ene?.consumption || {};
+    const enePr   = ene?.production || {};
+    const taxVal  = tax?.value ?? 0;
+    const mkVal   = mk?.value ?? 0;
+
+    const totalConsumption = (consMin + eneCons.systemTariff + eneCons.transmissionNetTariff + taxVal + mkVal) * 1.25 * 100;
+    const totalConsumptionMax = (consMax + eneCons.systemTariff + eneCons.transmissionNetTariff + taxVal + mkVal) * 1.25 * 100;
+    const exportFradrag = (enePr.balancetariff + enePr.indfodningstariff + (indf?.prices[0] || 0)) * 1.25 * 100;
+
+    const bucketRows = Object.entries(buckets)
+      .sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]))
+      .map(([rate, hours]) => {
+        const ranges = compressHours(hours);
+        return `<tr><td style="padding:3px 12px 3px 0; color:var(--muted)">${ranges}</td><td>${rate.replace('.', ',')} øre/kWh</td></tr>`;
+      }).join('');
+
+    html = `
+      <p style="font-size:0.83rem; line-height:1.6; margin-bottom:14px;">
+        <strong>Per-time historiske rates aktive</strong> for ${td.mapEntry.companyName}. Analysen slår op per CSV-time
+        og bruger den korrekte rate for det tidspunkt. Nedenfor vises hvad der bruges <em>i dag</em>;
+        analysen bruger evt. andre værdier for ældre timer.
+      </p>
+
+      <div style="font-size:0.78rem; color:var(--muted); margin-bottom:4px;">FORBRUGSSIDE — distribution per time-på-døgnet (kr. inkl. moms)</div>
+      <table style="width:100%; font-size:0.85rem; border-collapse:collapse; margin-bottom:14px;">
+        ${bucketRows}
+      </table>
+
+      <div style="font-size:0.78rem; color:var(--muted); margin-bottom:4px;">FORBRUGSSIDE — øvrige (faste) komponenter</div>
+      <table style="width:100%; font-size:0.85rem; border-collapse:collapse; margin-bottom:14px;">
+        <tr><td style="padding:3px 12px 3px 0; color:var(--muted)">Energinet systemtarif</td><td>${fmt(eneCons.systemTariff * 1.25 * 100)}</td></tr>
+        <tr><td style="padding:3px 12px 3px 0; color:var(--muted)">Energinet transmissions-nettarif</td><td>${fmt(eneCons.transmissionNetTariff * 1.25 * 100)}</td></tr>
+        <tr><td style="padding:3px 12px 3px 0; color:var(--muted)">Elafgift</td><td>${fmt(taxVal * 1.25 * 100)}</td></tr>
+        <tr><td style="padding:3px 12px 3px 0; color:var(--muted)">Leverandørtillæg (${b?.tillaegName || 'markup'})</td><td>${fmt(mkVal * 1.25 * 100)}</td></tr>
+      </table>
+
+      <div style="font-size:0.78rem; color:var(--muted); margin-bottom:4px;">EKSPORT-SIDE — fradrag fra spot (kr. inkl. moms)</div>
+      <table style="width:100%; font-size:0.85rem; border-collapse:collapse; margin-bottom:14px;">
+        <tr><td style="padding:3px 12px 3px 0; color:var(--muted)">Energinet balance produktion</td><td>${fmt(enePr.balancetariff * 1.25 * 100)}</td></tr>
+        <tr><td style="padding:3px 12px 3px 0; color:var(--muted)">Energinet indfødnings-tarif</td><td>${fmt(enePr.indfodningstariff * 1.25 * 100)}</td></tr>
+        <tr><td style="padding:3px 12px 3px 0; color:var(--muted)">Netselskab indfødnings-tarif${indf ? '' : ' (intet match)'}</td><td>${fmt((indf?.prices[0] || 0) * 1.25 * 100)}</td></tr>
+        <tr><td style="padding:3px 12px 3px 0; color:var(--muted)">Leverandørs balancegebyr (manuel, t4)</td><td>${(+document.getElementById('t4').value).toFixed(2).replace('.', ',')} øre/kWh</td></tr>
+        <tr><td colspan="2" style="padding:8px 0 6px 0; border-top:1px solid var(--border); color:var(--accent);"><strong>Eksport-fradrag i alt:</strong> ${fmt(exportFradrag + +document.getElementById('t4').value)}</td></tr>
+      </table>
+
+      <details style="margin-top:14px;">
+        <summary style="cursor:pointer; font-size:0.85rem; color:var(--accent);">Alle historiske perioder (${td.supplier.consumption.length} forbrug, ${td.supplier.indfodning.length} indfødning)</summary>
+        <div style="font-size:0.78rem; color:var(--muted); margin-top:8px;">Forbrug (distribution) — min/max per periode i øre/kWh m. moms:</div>
+        <table style="width:100%; font-size:0.8rem; border-collapse:collapse;">
+          ${td.supplier.consumption.map(r => {
+            const mn = Math.min(...r.prices) * 1.25 * 100;
+            const mx = Math.max(...r.prices) * 1.25 * 100;
+            const vf = r.validFrom.slice(0,10), vt = r.validTo ? r.validTo.slice(0,10) : 'open';
+            return `<tr><td style="padding:2px 12px 2px 0; color:var(--muted)">${vf} → ${vt}</td><td>${mn === mx ? mn.toFixed(2) : mn.toFixed(2) + '–' + mx.toFixed(2)} øre</td></tr>`;
+          }).join('')}
+        </table>
+        <div style="font-size:0.78rem; color:var(--muted); margin-top:8px;">Indfødning — per periode i øre/kWh m. moms:</div>
+        <table style="width:100%; font-size:0.8rem; border-collapse:collapse;">
+          ${td.supplier.indfodning.map(r => {
+            const v = r.prices[0] * 1.25 * 100;
+            const vf = r.validFrom.slice(0,10), vt = r.validTo ? r.validTo.slice(0,10) : 'open';
+            return `<tr><td style="padding:2px 12px 2px 0; color:var(--muted)">${vf} → ${vt}</td><td>${v.toFixed(3)} øre</td></tr>`;
+          }).join('')}
+        </table>
+      </details>
+
+      <p style="font-size:0.78rem; color:var(--muted); margin-top:14px;">
+        Kilder: distribution + indfødning fra EDS DatahubPricelist (GLN ${td.mapEntry.gln}); Energinet + elafgift fra <code>data/constants/</code>; markup fra Strømligning. Leverandørs balancegebyr (t4) er manuelt indtastet.
+      </p>
+    `;
+  } else if (b) {
+    // Fallback: vis gamle Strømligning-gennemsnits-breakdown (hvis ingen tariff-data aktiv)
+    const avgOther = b.avgTotalOere - b.avgElectricityOere - b.avgElectricityTaxOere;
+    html = `
+      <p style="font-size:0.83rem; line-height:1.6; margin-bottom:10px;">
+        <em>Bruger gennemsnit fra Strømligning</em> — netselskabs historiske tariff-data er ikke backfillet endnu.
+        Aktiver per-time mode ved at vælge en supplier hvis historiske data findes.
+      </p>
+      <table style="width:100%; font-size:0.85rem; border-collapse:collapse;">
+        <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Periode</td><td>${b.period}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Gns. total (med moms)</td><td>${fmt(b.avgTotalOere)}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0; color:var(--muted)">Tariff-overhead</td><td><strong>${fmt(b.avgOverheadOere)}</strong></td></tr>
+      </table>
+    `;
+  } else {
+    html = `<p style="font-size:0.85rem; color:var(--muted);">Anvend konfiguration først for at se udregning.</p>`;
+  }
+
+  document.getElementById('overheadBreakdown').innerHTML = html;
   det.style.display = 'block';
+}
+
+// "0,1,2,3,4,5,11,12,13" → "kl. 00-06, 11-14"
+function compressHours(hours) {
+  if (!hours.length) return '';
+  const sorted = [...hours].sort((a, b) => a - b);
+  const ranges = [];
+  let start = sorted[0], prev = sorted[0];
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i] === prev + 1) prev = sorted[i];
+    else { ranges.push([start, prev]); start = sorted[i]; prev = sorted[i]; }
+  }
+  ranges.push([start, prev]);
+  return 'kl. ' + ranges.map(([s, e]) => `${String(s).padStart(2,'0')}-${String((e+1)%24).padStart(2,'0')}`).join(', ');
 }
 
 function renderAutoDiscoveryStatus() {

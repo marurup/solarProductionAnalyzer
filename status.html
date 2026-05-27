@@ -88,6 +88,13 @@
   <div id="monthsByArea"></div>
 </div>
 
+<!-- Tariff-data (netselskaber + konstanter) -->
+<div class="card">
+  <h2>Tariff-data (historiske rates)</h2>
+  <p style="margin-bottom:14px">Backfillet via GitHub Action fra EDS DatahubPricelist + manuelt vedligeholdte konstanter for Energinet og elafgift. Bruges per CSV-time i analysen for nøjagtigt resultat.</p>
+  <div id="tariffStats"><div class="loading">Indlæser...</div></div>
+</div>
+
 <script>
 const AREAS = ['DK1', 'DK2'];
 
@@ -180,6 +187,74 @@ async function loadManifest() {
   }
 }
 
+// ─── Tariff-data ─────────────────────────────────────────────────────────────
+async function loadTariffStats() {
+  const el = document.getElementById('tariffStats');
+  try {
+    const [mapResp, eneResp, taxResp] = await Promise.all([
+      fetch('data/tariffs/_supplier-map.json', { cache: 'no-cache' }),
+      fetch('data/constants/energinet.json', { cache: 'no-cache' }),
+      fetch('data/constants/elafgift.json', { cache: 'no-cache' }),
+    ]);
+    const map = mapResp.ok ? await mapResp.json() : { suppliers: {} };
+    const ene = eneResp.ok ? await eneResp.json() : { ranges: [] };
+    const tax = taxResp.ok ? await taxResp.json() : { ranges: [] };
+
+    const suppliers = Object.entries(map.suppliers || {});
+    const supplierBlocks = await Promise.all(suppliers.map(async ([id, info]) => {
+      try {
+        const r = await fetch(`data/tariffs/${info.gln}.json`, { cache: 'no-cache' });
+        if (!r.ok) return `<tr><td colspan="4" style="color:var(--accent)">${id}: tariff-fil mangler (${r.status})</td></tr>`;
+        const d = await r.json();
+        const cFirst = d.consumption[d.consumption.length - 1]?.validFrom?.slice(0,10) || '—';
+        const cLast  = d.consumption[0]?.validTo?.slice(0,10) || 'open';
+        const iFirst = d.indfodning.length ? d.indfodning[d.indfodning.length - 1]?.validFrom?.slice(0,10) : '—';
+        const iLast  = d.indfodning.length ? (d.indfodning[0]?.validTo?.slice(0,10) || 'open') : '—';
+        return `<tr>
+          <td style="padding:6px 12px 6px 0;"><strong>${info.companyName || id}</strong><br><span style="font-size:0.75rem; color:var(--muted)">${id} · GLN ${info.gln}</span></td>
+          <td>${d.consumption.length} perioder<br><span style="font-size:0.75rem; color:var(--muted)">${cFirst} → ${cLast}</span></td>
+          <td>${d.indfodning.length} perioder<br><span style="font-size:0.75rem; color:var(--muted)">${d.indfodning.length ? `${iFirst} → ${iLast}` : '—'}</span></td>
+          <td style="font-size:0.78rem; color:var(--muted)">forbrug: <code>${info.consumptionCode}</code><br>indfødn: <code>${info.indfodningCode || '—'}</code></td>
+        </tr>`;
+      } catch { return `<tr><td colspan="4">${id}: fejl</td></tr>`; }
+    }));
+
+    el.innerHTML = `
+      <h3 style="margin-bottom:8px">Netselskaber (${suppliers.length})</h3>
+      <table style="width:100%; font-size:0.85rem; border-collapse:collapse; margin-bottom:18px;">
+        <thead><tr style="border-bottom:1px solid var(--border); color:var(--muted);">
+          <th style="text-align:left; padding:4px 0; font-weight:normal; font-size:0.78rem;">Netselskab</th>
+          <th style="text-align:left; padding:4px 0; font-weight:normal; font-size:0.78rem;">Forbrugstarif</th>
+          <th style="text-align:left; padding:4px 0; font-weight:normal; font-size:0.78rem;">Indfødnings-tarif</th>
+          <th style="text-align:left; padding:4px 0; font-weight:normal; font-size:0.78rem;">EDS-koder</th>
+        </tr></thead>
+        <tbody>${supplierBlocks.join('')}</tbody>
+      </table>
+
+      <h3 style="margin-bottom:8px">Energinet konstanter (${ene.ranges?.length || 0} perioder)</h3>
+      <table style="width:100%; font-size:0.85rem; border-collapse:collapse; margin-bottom:18px;">
+        ${(ene.ranges || []).map(r => `<tr>
+          <td style="padding:4px 12px 4px 0; color:var(--muted)">${r.validFrom?.slice(0,10)} → ${r.validTo?.slice(0,10) || 'open'}</td>
+          <td>
+            <span style="font-size:0.78rem; color:var(--muted)">forbrug:</span> sys ${(r.consumption?.systemTariff*100).toFixed(2)} øre, trans ${(r.consumption?.transmissionNetTariff*100).toFixed(2)} øre
+            <span style="font-size:0.78rem; color:var(--muted); margin-left:10px;">prod:</span> bal ${(r.production?.balancetariff*100).toFixed(3)} øre, indf ${(r.production?.indfodningstariff*100).toFixed(2)} øre
+          </td>
+        </tr>`).join('')}
+      </table>
+
+      <h3 style="margin-bottom:8px">Elafgift (${tax.ranges?.length || 0} perioder, kr/kWh ekskl. moms)</h3>
+      <table style="width:100%; font-size:0.85rem; border-collapse:collapse;">
+        ${(tax.ranges || []).map(r => `<tr>
+          <td style="padding:4px 12px 4px 0; color:var(--muted)">${r.validFrom?.slice(0,10)} → ${r.validTo?.slice(0,10) || 'open'}</td>
+          <td>${(r.value*100).toFixed(2)} øre/kWh${r.value < 0.01 ? ' <span style="color:var(--accent); font-size:0.75rem">(reduceret periode)</span>' : ''}</td>
+        </tr>`).join('')}
+      </table>
+    `;
+  } catch (e) {
+    el.innerHTML = `<div class="empty">Kunne ikke indlæse tariff-data: ${e.message}</div>`;
+  }
+}
+
 // ─── Gemt brugerkonfiguration ────────────────────────────────────────────────
 const CONFIG_KEY = 'solar-analyzer-config-v1';
 function loadConfig() { try { return JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}'); } catch { return {}; } }
@@ -228,6 +303,7 @@ document.getElementById('btnClearLocal').addEventListener('click', async () => {
 loadStoredConfig();
 loadLocalCache();
 loadManifest();
+loadTariffStats();
 </script>
 </body>
 </html>
