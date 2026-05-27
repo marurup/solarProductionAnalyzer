@@ -1,0 +1,16 @@
+{
+  "_meta": {
+    "description": "Energinets systemtarif og transmissions-nettarif (kr/kWh ekskl. moms). Bidrager til 'transmissionsudgifter til Energinet' i forbrugsprisen.",
+    "source": "Strømligning + Energinets prisliste",
+    "lastUpdated": "2026-05-27",
+    "note": "TODO: tilføj historiske rates 2021-2025. Pt. kun 2026 verificeret via Strømligning."
+  },
+  "ranges": [
+    {
+      "validFrom": "2026-01-01",
+      "validTo": null,
+      "systemTariff": 0.072,
+      "transmissionNetTariff": 0.043
+    }
+  ]
+}

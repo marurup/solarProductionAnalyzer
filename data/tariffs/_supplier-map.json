@@ -1,0 +1,13 @@
+{
+  "_meta": {
+    "description": "Map fra Strømligning supplier_id til EDS DatahubPricelist GLN + ChargeTypeCode for C-kunder (private). Udvides efterhånden som flere netselskaber backfilles.",
+    "generatedAt": "2026-05-27T00:00:00Z"
+  },
+  "suppliers": {
+    "n1_c": {
+      "gln": "5790001089030",
+      "chargeTypeCode": "CD",
+      "companyName": "N1 A/S - 131"
+    }
+  }
+}
