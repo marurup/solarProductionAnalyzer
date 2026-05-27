@@ -32,7 +32,10 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Hent tariffer (committer løbende)
+      - name: Hent Energinet-tariffer (constants/)
+        run: node scripts/fetch-energinet.mjs
+
+      - name: Hent netselskab-tariffer (committer løbende)
         env:
           FORCE_UPDATE:    ${{ github.event.inputs.force_update }}
           ONLY_SUPPLIERS:  ${{ github.event.inputs.only_suppliers }}
