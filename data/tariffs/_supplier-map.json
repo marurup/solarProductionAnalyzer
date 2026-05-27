@@ -1,7 +1,8 @@
 {
   "_meta": {
-    "description": "Map fra Strømligning supplier_id til EDS DatahubPricelist GLN. consumptionCode = ChargeTypeCode for nettarif på forbrugs-siden (typisk per hour-of-day). indfodningCode = ChargeTypeCode for nettarif på indfødnings/eksport-siden (typisk daglig flat). Nogle netselskaber bruger B-rate til C-kunders indfødning fordi de ikke differentierer på spændings-niveau ved produktion.",
-    "generatedAt": "2026-05-27T00:00:00Z"
+    "description": "Strømligning supplier_id → EDS GLN + ChargeTypeCode. consumptionCode = nettarif på forbrugs-siden. indfodningCode = nettarif på eksport-siden (kan være B-rate hvis netselskab ikke har separat C-kode).",
+    "generatedAt": "2026-05-27T08:09:23.683Z",
+    "supplierCount": 6
   },
   "suppliers": {
     "n1_c": {
@@ -10,6 +11,41 @@
       "indfodningCode": "B1 INDF",
       "companyName": "N1 A/S - 131",
       "note": "N1 har ikke separat C-indfødnings-tarif — bruger B1-rate (Nettarif indfødning B høj) til alle indfødende C-kunder"
+    },
+    "aal_el-net_c": {
+      "gln": "5790001095451",
+      "consumptionCode": "AAL-NT-05",
+      "indfodningCode": null,
+      "companyName": "Aal El-Net A M B A",
+      "match": "exact"
+    },
+    "cerius_c": {
+      "gln": "5790000705184",
+      "consumptionCode": "30TR_C_ET",
+      "indfodningCode": "30_C_I",
+      "companyName": "Cerius A/S",
+      "match": "exact"
+    },
+    "dinel_c": {
+      "gln": "5790000610099",
+      "consumptionCode": "TCL<100_02",
+      "indfodningCode": "TC_IND_03",
+      "companyName": "Dinel A/S",
+      "match": "exact"
+    },
+    "el-net_kongerslev": {
+      "gln": "5790002502699",
+      "consumptionCode": "K_22100",
+      "indfodningCode": null,
+      "companyName": "El-net Kongerslev A/S",
+      "match": "exact"
+    },
+    "elektrus_c": {
+      "gln": "5790000836239",
+      "consumptionCode": "6000091",
+      "indfodningCode": "6000121",
+      "companyName": "Elektrus A/S",
+      "match": "exact"
     }
   }
 }
