@@ -1,0 +1,55 @@
+name: Update tariffs
+
+on:
+  schedule:
+    # Månedligt — netselskabers tariff-rates ændres typisk per 1. i måneden
+    - cron: '0 5 1 * *'
+  workflow_dispatch:
+    inputs:
+      force_update:
+        description: 'Force-fetch også eksisterende filer (sæt til 1)'
+        required: false
+        default: '0'
+      only_suppliers:
+        description: 'Begræns til specifikke supplier_ids (komma-separeret, fx n1_c,radius_c)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Konfigurer git
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Hent tariffer (committer løbende)
+        env:
+          FORCE_UPDATE:    ${{ github.event.inputs.force_update }}
+          ONLY_SUPPLIERS:  ${{ github.event.inputs.only_suppliers }}
+          COMMIT_EVERY:    '5'
+        run: node scripts/fetch-tariffs.mjs
+
+      - name: Sikkerhedsnet — commit eventuelle resterende ændringer
+        if: always()
+        run: |
+          git add data/tariffs data/constants
+          if git diff --staged --quiet; then
+            echo "Ingen ucommitterede ændringer"
+          else
+            git commit -m "Final tariff-commit $(date -u +%Y-%m-%dT%H:%MZ)"
+            for i in 1 2 3; do
+              git pull --rebase origin main && git push && break
+              echo "Push forsøg $i fejlede — venter 5s"
+              sleep 5
+            done
+          fi
