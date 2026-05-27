@@ -1,16 +1,14 @@
 {
   "_meta": {
     "description": "Strømligning supplier_id → EDS GLN + ChargeTypeCode. consumptionCode = nettarif på forbrugs-siden. indfodningCode = nettarif på eksport-siden (kan være B-rate hvis netselskab ikke har separat C-kode).",
-    "generatedAt": "2026-05-27T08:10:16.350Z",
-    "supplierCount": 16
+    "generatedAt": "2026-05-27T08:10:38.886Z",
+    "supplierCount": 21
   },
   "suppliers": {
     "n1_c": {
       "gln": "5790001089030",
-      "consumptionCode": "CD",
-      "indfodningCode": "B1 INDF",
-      "companyName": "N1 A/S - 131",
-      "note": "N1 har ikke separat C-indfødnings-tarif — bruger B1-rate (Nettarif indfødning B høj) til alle indfødende C-kunder"
+      "match": "exact",
+      "companyName": "N1 A/S - 131"
     },
     "aal_el-net_c": {
       "gln": "5790001095451",
@@ -115,6 +113,41 @@
       "consumptionCode": "245-NT01T",
       "indfodningCode": "INF_NT_C",
       "companyName": "Konstant Net A/S - 245",
+      "match": "exact"
+    },
+    "l-net": {
+      "gln": "5790001090111",
+      "consumptionCode": "3000",
+      "indfodningCode": "8000",
+      "companyName": "L-Net A/S",
+      "match": "exact"
+    },
+    "laesoe_elnet_c": {
+      "gln": "5790001103460",
+      "consumptionCode": "43100",
+      "indfodningCode": "43320",
+      "companyName": "Læsø Elnet A/S",
+      "match": "exact"
+    },
+    "midtfyns_c": {
+      "gln": "5790001089023",
+      "consumptionCode": "TNT15000",
+      "indfodningCode": "TNT15013",
+      "companyName": "Midtfyns Elforsyning A.m.b.A",
+      "match": "exact"
+    },
+    "n1_344": {
+      "gln": "5790000611003",
+      "consumptionCode": "T-C-F-F-TD",
+      "indfodningCode": "T-C-INDF",
+      "companyName": "N1 A/S - 344",
+      "match": "exact"
+    },
+    "netselskabet_elvaerk_331_c": {
+      "gln": "5790000681358",
+      "consumptionCode": "5NCFF",
+      "indfodningCode": "5NCFI",
+      "companyName": "Netselskabet Elværk A/S",
       "match": "exact"
     }
   }
