@@ -231,22 +231,41 @@ async function loadTariffStats() {
         <tbody>${supplierBlocks.join('')}</tbody>
       </table>
 
-      <h3 style="margin-bottom:8px">Energinet konstanter (${ene.ranges?.length || 0} perioder)</h3>
+      <h3 style="margin-bottom:8px">Energinets eltariffer (${ene.ranges?.length || 0} perioder) <span style="text-transform:none; color:var(--muted); font-weight:400;">— øre/kWh ekskl. moms</span></h3>
+      <p style="font-size:0.8rem; color:var(--muted); margin-bottom:10px;">Energinets terminologi: <em>nettarif</em> + <em>systemtarif</em> betales af forbrugere; <em>indfødningstarif</em> + <em>balancetarif</em> betales af producenter. Begge sider betales pr. forbrugt/produceret kWh fra/til kollektivt net.</p>
       <table style="width:100%; font-size:0.85rem; border-collapse:collapse; margin-bottom:18px;">
-        ${(ene.ranges || []).map(r => `<tr>
-          <td style="padding:4px 12px 4px 0; color:var(--muted)">${r.validFrom?.slice(0,10)} → ${r.validTo?.slice(0,10) || 'open'}</td>
-          <td>
-            <span style="font-size:0.78rem; color:var(--muted)">forbrug:</span> sys ${(r.consumption?.systemTariff*100).toFixed(2)} øre, trans ${(r.consumption?.transmissionNetTariff*100).toFixed(2)} øre
-            <span style="font-size:0.78rem; color:var(--muted); margin-left:10px;">prod:</span> bal ${(r.production?.balancetariff*100).toFixed(3)} øre, indf ${(r.production?.indfodningstariff*100).toFixed(2)} øre
-          </td>
-        </tr>`).join('')}
+        <thead>
+          <tr style="border-bottom:1px solid var(--border); color:var(--muted); font-size:0.75rem; text-transform:uppercase;">
+            <th rowspan="2" style="text-align:left; padding:4px 12px 4px 0; font-weight:normal; vertical-align:bottom;">Periode</th>
+            <th colspan="2" style="text-align:center; padding:4px; font-weight:600; color:var(--text); border-bottom:1px solid var(--border);">Forbrugere betaler</th>
+            <th colspan="2" style="text-align:center; padding:4px; font-weight:600; color:var(--text); border-bottom:1px solid var(--border);">Producenter betaler</th>
+          </tr>
+          <tr style="color:var(--muted); font-size:0.75rem;">
+            <th style="text-align:right; padding:4px 8px 6px 12px; font-weight:normal;">Nettarif</th>
+            <th style="text-align:right; padding:4px 12px 6px 8px; font-weight:normal;">Systemtarif</th>
+            <th style="text-align:right; padding:4px 8px 6px 12px; font-weight:normal;">Indfødnings­tarif</th>
+            <th style="text-align:right; padding:4px 0 6px 8px; font-weight:normal;">Balance­tarif</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${(ene.ranges || []).map(r => {
+            const f = (v, d=2) => v == null ? '—' : (v*100).toFixed(d).replace('.', ',');
+            return `<tr>
+              <td style="padding:4px 12px 4px 0; color:var(--muted)">${r.validFrom?.slice(0,10)} → ${r.validTo?.slice(0,10) || 'open'}</td>
+              <td style="text-align:right; padding:4px 8px;">${f(r.consumption?.transmissionNetTariff)}</td>
+              <td style="text-align:right; padding:4px 12px 4px 8px;">${f(r.consumption?.systemTariff)}</td>
+              <td style="text-align:right; padding:4px 8px;">${f(r.production?.indfodningstariff)}</td>
+              <td style="text-align:right; padding:4px 0 4px 8px;">${f(r.production?.balancetariff, 3)}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
       </table>
 
-      <h3 style="margin-bottom:8px">Elafgift (${tax.ranges?.length || 0} perioder, kr/kWh ekskl. moms)</h3>
+      <h3 style="margin-bottom:8px">Elafgift (${tax.ranges?.length || 0} perioder) <span style="text-transform:none; color:var(--muted); font-weight:400;">— øre/kWh ekskl. moms</span></h3>
       <table style="width:100%; font-size:0.85rem; border-collapse:collapse;">
         ${(tax.ranges || []).map(r => `<tr>
           <td style="padding:4px 12px 4px 0; color:var(--muted)">${r.validFrom?.slice(0,10)} → ${r.validTo?.slice(0,10) || 'open'}</td>
-          <td>${(r.value*100).toFixed(2)} øre/kWh${r.value < 0.01 ? ' <span style="color:var(--accent); font-size:0.75rem">(reduceret periode)</span>' : ''}</td>
+          <td style="text-align:right; padding:4px 0;">${(r.value*100).toFixed(2).replace('.', ',')}${r.value < 0.01 ? ' <span style="color:var(--accent); font-size:0.75rem; margin-left:6px;">(reduceret periode)</span>' : ''}</td>
         </tr>`).join('')}
       </table>
     `;

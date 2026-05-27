@@ -1587,16 +1587,16 @@ function renderOverheadBreakdown() {
 
       <div style="font-size:0.78rem; color:var(--muted); margin-bottom:4px;">FORBRUGSSIDE — øvrige (faste) komponenter</div>
       <table style="width:100%; font-size:0.85rem; border-collapse:collapse; margin-bottom:14px;">
+        <tr><td style="padding:3px 12px 3px 0; color:var(--muted)">Energinet nettarif</td><td>${fmt(eneCons.transmissionNetTariff * 1.25 * 100)}</td></tr>
         <tr><td style="padding:3px 12px 3px 0; color:var(--muted)">Energinet systemtarif</td><td>${fmt(eneCons.systemTariff * 1.25 * 100)}</td></tr>
-        <tr><td style="padding:3px 12px 3px 0; color:var(--muted)">Energinet transmissions-nettarif</td><td>${fmt(eneCons.transmissionNetTariff * 1.25 * 100)}</td></tr>
         <tr><td style="padding:3px 12px 3px 0; color:var(--muted)">Elafgift</td><td>${fmt(taxVal * 1.25 * 100)}</td></tr>
         <tr><td style="padding:3px 12px 3px 0; color:var(--muted)">Leverandørtillæg (${b?.tillaegName || 'markup'})</td><td>${fmt(mkVal * 1.25 * 100)}</td></tr>
       </table>
 
       <div style="font-size:0.78rem; color:var(--muted); margin-bottom:4px;">EKSPORT-SIDE — fradrag fra spot (kr. inkl. moms)</div>
       <table style="width:100%; font-size:0.85rem; border-collapse:collapse; margin-bottom:14px;">
-        <tr><td style="padding:3px 12px 3px 0; color:var(--muted)">Energinet balance produktion</td><td>${fmt(enePr.balancetariff * 1.25 * 100)}</td></tr>
-        <tr><td style="padding:3px 12px 3px 0; color:var(--muted)">Energinet indfødnings-tarif</td><td>${fmt(enePr.indfodningstariff * 1.25 * 100)}</td></tr>
+        <tr><td style="padding:3px 12px 3px 0; color:var(--muted)">Energinet indfødningstarif</td><td>${fmt(enePr.indfodningstariff * 1.25 * 100)}</td></tr>
+        <tr><td style="padding:3px 12px 3px 0; color:var(--muted)">Energinet balancetarif</td><td>${fmt(enePr.balancetariff * 1.25 * 100)}</td></tr>
         <tr><td style="padding:3px 12px 3px 0; color:var(--muted)">Netselskab indfødnings-tarif${indf ? '' : ' (intet match)'}</td><td>${fmt((indf?.prices[0] || 0) * 1.25 * 100)}</td></tr>
         <tr><td style="padding:3px 12px 3px 0; color:var(--muted)">Leverandørs balancegebyr (manuel, t4)</td><td>${(+document.getElementById('t4').value).toFixed(2).replace('.', ',')} øre/kWh</td></tr>
         <tr><td colspan="2" style="padding:8px 0 6px 0; border-top:1px solid var(--border); color:var(--accent);"><strong>Eksport-fradrag i alt:</strong> ${fmt(exportFradrag + +document.getElementById('t4').value)}</td></tr>
