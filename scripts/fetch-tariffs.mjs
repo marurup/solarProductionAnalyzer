@@ -16,10 +16,13 @@ import { execSync } from 'node:child_process';
 const FORCE_UPDATE = process.env.FORCE_UPDATE === '1';
 const COMMIT_EVERY = parseInt(process.env.COMMIT_EVERY || '5', 10);
 
-// MVP — udvides; key er Strømlignings supplier_id, gln er EDS GLN_Number,
-// chargeTypeCode er Note='Nettarif C' (eller tilsvarende) for det netselskab.
+// MVP — udvides; key er Strømlignings supplier_id, gln er EDS GLN_Number.
+//   consumptionCode = ChargeTypeCode for Nettarif C (per-kWh forbrugstarif)
+//   indfodningCode  = ChargeTypeCode for Nettarif indfødning C (per-kWh eksport-tarif),
+//                     eller null hvis netselskab ikke har separat C-indfødnings-tarif
+//                     (fx N1, der historisk har 0 for C-kunder pga. aftagepligt)
 const SUPPLIER_MAP = {
-  n1_c: { gln: '5790001089030', chargeTypeCode: 'CD', companyName: 'N1 A/S - 131' },
+  n1_c: { gln: '5790001089030', consumptionCode: 'CD', indfodningCode: null, companyName: 'N1 A/S - 131' },
   // TODO: udvid med flere netselskaber efter MVP er valideret
 };
 
@@ -44,32 +47,39 @@ async function fetchJson(url, label) {
 }
 
 async function fetchTariffsForGLN(gln, chargeTypeCode) {
-  // ChargeType=D03 og ResolutionDuration=PT1H = per-kWh nettarif (ikke abonnement)
-  // ChargeTypeCode er ikke unik på tværs af ChargeType: samme "CD" findes både som
-  // D03 (Nettarif C, per kWh) og D01 (Net abo C, månedligt abonnement). Vi filtrerer
-  // ChargeType=D03 i query'en og dropper non-PT1H records efterfølgende.
+  // ChargeType=D03 = per-kWh tarif. To opløsninger:
+  //   ResolutionDuration=PT1H → time-of-day variation (Price1..Price24 unikke)
+  //   ResolutionDuration=P1D  → daglig flat rate (kun Price1 har værdi)
+  // ChargeType=D01 er abonnement (kr/måned) — droppes.
   const filter = JSON.stringify({ GLN_Number: gln, ChargeTypeCode: chargeTypeCode, ChargeType: 'D03' });
   const url = `https://api.energidataservice.dk/dataset/DatahubPricelist`
     + `?filter=${encodeURIComponent(filter)}`
     + `&sort=${encodeURIComponent('ValidFrom DESC')}`
     + `&limit=1000`;
   const json = await fetchJson(url, `${gln}/${chargeTypeCode}`);
-  const records = (json.records || []).filter(r => r.ResolutionDuration === 'PT1H');
+  const records = (json.records || []).filter(r =>
+    r.ResolutionDuration === 'PT1H' || r.ResolutionDuration === 'P1D'
+  );
   return records;
 }
 
 function recordsToTariff(records) {
-  // Konverter til kompakt format: per periode, 24 priser per hour-of-day
-  // Returner records sorteret efter ValidFrom DESC (nyeste først for at lookup-loop kan break tidligt)
+  // Normaliserer til array af 24 priser uanset PT1H/P1D. For P1D fyldes alle
+  // 24 timer med Price1 (flat daily rate). Sorteret nyeste først.
   return records
-    .map(r => ({
-      validFrom: r.ValidFrom,
-      validTo:   r.ValidTo, // kan være null = "open"
-      note:      r.Note,
-      prices:    Array.from({ length: 24 }, (_, i) => r[`Price${i+1}`] ?? 0),
-      // Behold metadata til debugging
-      vatClass:  r.VATClass,
-    }))
+    .map(r => {
+      const isHourly = r.ResolutionDuration === 'PT1H';
+      const prices = isHourly
+        ? Array.from({ length: 24 }, (_, i) => r[`Price${i+1}`] ?? 0)
+        : Array.from({ length: 24 }, () => r.Price1 ?? 0);
+      return {
+        validFrom: r.ValidFrom,
+        validTo:   r.ValidTo,
+        note:      r.Note,
+        resolution: r.ResolutionDuration, // for debugging
+        prices,
+      };
+    })
     .sort((a, b) => b.validFrom.localeCompare(a.validFrom));
 }
 
@@ -114,29 +124,34 @@ async function main() {
             continue; } catch {}
     }
 
-    console.log(`  ${supplierId} (${info.gln} ${info.chargeTypeCode}): henter...`);
+    console.log(`  ${supplierId} (${info.gln}): henter forbrug=${info.consumptionCode}, indfødn=${info.indfodningCode ?? 'INGEN'}`);
     try {
-      const records = await fetchTariffsForGLN(info.gln, info.chargeTypeCode);
-      if (records.length === 0) {
-        console.warn(`    Tomt svar — springer over`);
+      const consumption = await fetchTariffsForGLN(info.gln, info.consumptionCode);
+      if (consumption.length === 0) {
+        console.warn(`    Tomt svar for forbrugstarif — springer over`);
         continue;
       }
-      const tariff = recordsToTariff(records);
+
+      let indfodning = [];
+      if (info.indfodningCode) {
+        indfodning = await fetchTariffsForGLN(info.gln, info.indfodningCode);
+      }
 
       const content = {
         _meta: {
           gln: info.gln,
-          chargeOwner: records[0].ChargeOwner,
-          chargeTypeCode: info.chargeTypeCode,
-          recordCount: tariff.length,
+          chargeOwner: consumption[0].ChargeOwner,
+          consumptionCode: info.consumptionCode,
+          indfodningCode: info.indfodningCode,
           fetched: new Date().toISOString(),
         },
-        records: tariff,
+        consumption: recordsToTariff(consumption),
+        indfodning: recordsToTariff(indfodning),
       };
 
       await fs.mkdir(path.dirname(filePath), { recursive: true });
       await fs.writeFile(filePath, JSON.stringify(content, null, 2) + '\n');
-      console.log(`    ${tariff.length} historiske perioder skrevet til ${filePath}`);
+      console.log(`    Forbrug: ${content.consumption.length} perioder, indfødn: ${content.indfodning.length} perioder → ${filePath}`);
       supplierMap[supplierId] = info;
       n++;
 

@@ -912,22 +912,40 @@ function lookupByDate(items, dateStr) {
   return null;
 }
 
-// Returnerer alle tariff-komponenter for én time, alle i kr/kWh UDEN moms
+// Returnerer alle tariff-komponenter for én time, alle i kr/kWh UDEN moms.
+// Output deles i forbrugs- og eksport-side (man betaler forskellige tariffer
+// hver vej, og indfødnings-tarif er typisk per dag, forbrugs per time-of-day).
 function lookupHourlyComponents(hourKey, tariffData) {
   const dateStr = hourKey.slice(0, 10);
   const hourOfDay = parseInt(hourKey.slice(11, 13), 10);
-  const out = { distribution: 0, systemTariff: 0, transmission: 0, elafgift: 0, markup: 0, dataComplete: true };
+  const out = {
+    // Forbrugsside (når du selvforbruger)
+    distribution: 0, systemTariff: 0, transmissionNetTariff: 0, elafgift: 0, markup: 0,
+    // Eksportside (når du sender til nettet)
+    energinetIndfodning: 0, energinetBalance: 0, supplierIndfodning: 0,
+    dataComplete: true,
+  };
 
-  if (tariffData.supplier?.records?.length) {
-    const rec = lookupByDate(tariffData.supplier.records, dateStr);
+  if (tariffData.supplier?.consumption?.length) {
+    const rec = lookupByDate(tariffData.supplier.consumption, dateStr);
     if (rec) out.distribution = rec.prices[hourOfDay] || 0;
     else out.dataComplete = false;
   } else out.dataComplete = false;
 
+  if (tariffData.supplier?.indfodning?.length) {
+    const rec = lookupByDate(tariffData.supplier.indfodning, dateStr);
+    if (rec) out.supplierIndfodning = rec.prices[hourOfDay] || 0;
+    // Hvis netselskab ikke har separat indfødnings-tarif (= 0 records), beholdes 0
+  }
+
   if (tariffData.energinet?.ranges?.length) {
     const r = lookupByDate(tariffData.energinet.ranges, dateStr);
-    if (r) { out.systemTariff = r.systemTariff || 0; out.transmission = r.transmissionNetTariff || 0; }
-    else out.dataComplete = false;
+    if (r) {
+      out.systemTariff = r.consumption?.systemTariff || 0;
+      out.transmissionNetTariff = r.consumption?.transmissionNetTariff || 0;
+      out.energinetIndfodning = r.production?.indfodningstariff || 0;
+      out.energinetBalance = r.production?.balancetariff || 0;
+    } else out.dataComplete = false;
   } else out.dataComplete = false;
 
   if (tariffData.elafgift?.ranges?.length) {
@@ -944,7 +962,7 @@ function lookupHourlyComponents(hourKey, tariffData) {
 }
 
 function analyze(exportRows, spotPrices, tariffs, tariffData) {
-  const totalFradrag = tariffs.t1 + tariffs.t2 + tariffs.t3 + tariffs.t4;
+  const manualFradrag = tariffs.t1 + tariffs.t2 + tariffs.t3 + tariffs.t4;
   const results = [];
 
   const hasPerHourData = !!(tariffData?.supplier && tariffData?.energinet && tariffData?.elafgift);
@@ -957,21 +975,25 @@ function analyze(exportRows, spotPrices, tariffs, tariffData) {
 
     if (spotOere === undefined) { missingPrices++; continue; }
 
-    let selvforbrugVaerdi;
+    let selvforbrugVaerdi, nettoEksportOere;
     let breakdown = null;
     if (hasPerHourData) {
       const c = lookupHourlyComponents(row.hourKey, tariffData);
       if (!c.dataComplete) incompleteRows++;
-      // Alle komponenter er uden moms (kr/kWh). consumer_price = (spot + alle) × 1,25
-      const tariffsExVatKr = c.distribution + c.systemTariff + c.transmission + c.elafgift + c.markup;
-      selvforbrugVaerdi = spotOere * 1.25 + tariffsExVatKr * 1.25 * 100; // → øre
+      // Forbrugsside: consumer_price = (spot + alle forbrugs-komponenter) × 1,25
+      const consumptionExVatKr = c.distribution + c.systemTariff + c.transmissionNetTariff + c.elafgift + c.markup;
+      selvforbrugVaerdi = spotOere * 1.25 + consumptionExVatKr * 1.25 * 100;
+      // Eksportside: fradrag = Energinet balance + indfødning + supplier indfødning + leverandør (t4)
+      // Manual t4 beholdes (Strømligning leverer ikke leverandør-balance for produktion)
+      const exportFradragExVatKr = c.energinetBalance + c.energinetIndfodning + c.supplierIndfodning;
+      const exportFradragOere = exportFradragExVatKr * 1.25 * 100 + tariffs.t4;
+      nettoEksportOere = spotOere - exportFradragOere;
       breakdown = c;
     } else {
-      // Fallback: brug manuel "Tariff-overhead"-felt
       selvforbrugVaerdi = spotOere * 1.25 + tariffs.selfConsumpOverhead;
+      nettoEksportOere = spotOere - manualFradrag;
     }
 
-    const nettoEksportOere = spotOere - totalFradrag;
     const tabtFortjenesteDKK = Math.max(0, (selvforbrugVaerdi - nettoEksportOere) * row.kwh / 100);
 
     results.push({
