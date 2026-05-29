@@ -4,6 +4,8 @@ Statisk web-app der hjælper danske solcelleejere med at identificere "dårlige 
 
 Alt processeres lokalt i browseren — ingen data forlader brugerens maskine.
 
+Brug det live her: https://marurup.github.io/solarProductionAnalyzer/
+
 ## Sådan virker det
 
 1. Brugeren uploader CSV-eksport fra eloverblik.dk (én fil med både forbrug og produktion)
