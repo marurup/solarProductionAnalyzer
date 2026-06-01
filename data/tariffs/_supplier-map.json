@@ -1,254 +1,184 @@
 {
   "_meta": {
     "description": "Strømligning supplier_id → EDS GLN + ChargeTypeCode. consumptionCode = nettarif på forbrugs-siden. indfodningCode = nettarif på eksport-siden (kan være B-rate hvis netselskab ikke har separat C-kode).",
-    "generatedAt": "2026-05-27T12:22:40.050Z",
+    "generatedAt": "2026-06-01T10:29:29.260Z",
     "supplierCount": 35
   },
   "suppliers": {
     "n1_c": {
       "gln": "5790001089030",
-      "consumptionCode": "CD",
-      "indfodningCode": "C INDF",
-      "companyName": "N1 A/S - 131",
-      "match": "exact"
+      "match": "exact",
+      "companyName": "N1 A/S - 131"
     },
     "aal_el-net_c": {
       "gln": "5790001095451",
-      "consumptionCode": "AAL-NTR05",
-      "indfodningCode": null,
-      "companyName": "Aal El-Net A M B A",
-      "match": "exact"
+      "match": "exact",
+      "companyName": "Aal El-Net A M B A"
     },
     "cerius_c": {
       "gln": "5790000705184",
-      "consumptionCode": "30TR_C_ET",
-      "indfodningCode": "30_C_I",
-      "companyName": "Cerius A/S",
-      "match": "exact"
+      "match": "exact",
+      "companyName": "Cerius A/S"
     },
     "dinel_c": {
       "gln": "5790000610099",
-      "consumptionCode": "TCL<100_02",
-      "indfodningCode": "TC_IND_03",
-      "companyName": "Dinel A/S",
-      "match": "exact"
+      "match": "exact",
+      "companyName": "Dinel A/S"
     },
     "el-net_kongerslev": {
       "gln": "5790002502699",
-      "consumptionCode": "K_22100",
-      "indfodningCode": null,
-      "companyName": "El-net Kongerslev A/S",
-      "match": "exact"
+      "match": "exact",
+      "companyName": "El-net Kongerslev A/S"
     },
     "elektrus_c": {
       "gln": "5790000836239",
-      "consumptionCode": "6000091",
-      "indfodningCode": "6000121",
-      "companyName": "Elektrus A/S",
-      "match": "exact"
+      "match": "exact",
+      "companyName": "Elektrus A/S"
     },
     "elinor": {
       "gln": "5790001095277",
-      "consumptionCode": "43300",
-      "indfodningCode": "44300",
-      "companyName": "Elinord A/S",
-      "match": "manual"
+      "match": "manual",
+      "companyName": "Elinord A/S"
     },
     "elnet_midt_c": {
       "gln": "5790001100520",
-      "consumptionCode": "T3001",
-      "indfodningCode": "33001",
-      "companyName": "Elnet Midt A/S",
-      "match": "exact"
+      "match": "exact",
+      "companyName": "Elnet Midt A/S"
     },
     "flow_elnet": {
       "gln": "5790000392551",
-      "consumptionCode": "FE1 NT-01",
-      "indfodningCode": "FE1 IT",
-      "companyName": "FLOW Elnet A/S",
-      "match": "exact"
+      "match": "exact",
+      "companyName": "FLOW Elnet A/S"
     },
     "forsyning_elnet": {
       "gln": "5790001088309",
-      "consumptionCode": "STR-NT-03",
-      "indfodningCode": "740",
-      "companyName": "Forsyning Elnet A/S",
-      "match": "exact"
+      "match": "exact",
+      "companyName": "Forsyning Elnet A/S"
     },
     "gev_elnet_c": {
       "gln": "5790000681105",
-      "consumptionCode": "GEV-NT-01",
-      "indfodningCode": null,
-      "companyName": "Grindsted Elnet A/S",
-      "match": "manual"
+      "match": "manual",
+      "companyName": "Grindsted Elnet A/S"
     },
     "hammel_elforsyning_net_as": {
       "gln": "5790001090166",
-      "consumptionCode": "C-Tarif",
-      "indfodningCode": null,
-      "companyName": "Hammel Elforsyning Net A/S",
-      "match": "exact"
+      "match": "exact",
+      "companyName": "Hammel Elforsyning Net A/S"
     },
     "hjerting_transformatorforening": {
       "gln": "5790001095376",
-      "consumptionCode": "HE-NT-01",
-      "indfodningCode": null,
-      "companyName": "Hjerting Transformatorforening",
-      "match": "exact"
+      "match": "exact",
+      "companyName": "Hjerting Transformatorforening"
     },
     "ikast_el_net_as_c": {
       "gln": "5790000682102",
-      "consumptionCode": "IEV-NT-01",
-      "indfodningCode": "27",
-      "companyName": "Ikast El Net A/S",
-      "match": "exact"
+      "match": "exact",
+      "companyName": "Ikast El Net A/S"
     },
     "konstant_c": {
       "gln": "5790000704842",
-      "consumptionCode": "151-NT01T",
-      "indfodningCode": "INF_NT_C",
-      "companyName": "Konstant Net A/S - 151",
-      "match": "exact"
+      "match": "exact",
+      "companyName": "Konstant Net A/S - 151"
     },
     "konstant_c_245": {
       "gln": "5790000683345",
-      "consumptionCode": "245-NT01T",
-      "indfodningCode": "INF_NT_C",
-      "companyName": "Konstant Net A/S - 245",
-      "match": "exact"
+      "match": "exact",
+      "companyName": "Konstant Net A/S - 245"
     },
     "l-net": {
       "gln": "5790001090111",
-      "consumptionCode": "3000",
-      "indfodningCode": "8000",
-      "companyName": "L-Net A/S",
-      "match": "exact"
+      "match": "exact",
+      "companyName": "L-Net A/S"
     },
     "laesoe_elnet_c": {
       "gln": "5790001103460",
-      "consumptionCode": "43100",
-      "indfodningCode": "43320",
-      "companyName": "Læsø Elnet A/S",
-      "match": "exact"
+      "match": "exact",
+      "companyName": "Læsø Elnet A/S"
     },
     "midtfyns_c": {
       "gln": "5790001089023",
-      "consumptionCode": "TNT15000",
-      "indfodningCode": "TNT15013",
-      "companyName": "Midtfyns Elforsyning A.m.b.A",
-      "match": "exact"
+      "match": "exact",
+      "companyName": "Midtfyns Elforsyning A.m.b.A"
     },
     "n1_344": {
       "gln": "5790000611003",
-      "consumptionCode": "T-C-F-F-TD",
-      "indfodningCode": "T-C-INDF",
-      "companyName": "N1 A/S - 344",
-      "match": "exact"
+      "match": "exact",
+      "companyName": "N1 A/S - 344"
     },
     "netselskabet_elvaerk_331_c": {
       "gln": "5790000681358",
-      "consumptionCode": "5NCFF",
-      "indfodningCode": "5NCFI",
-      "companyName": "Netselskabet Elværk A/S",
-      "match": "exact"
+      "match": "exact",
+      "companyName": "Netselskabet Elværk A/S"
     },
     "netselskabet_elvaerk_c": {
       "gln": "5790000681358",
-      "consumptionCode": "5NCFF",
-      "indfodningCode": "5NCFI",
-      "companyName": "Netselskabet Elværk A/S",
-      "match": "fuzzy"
+      "match": "fuzzy",
+      "companyName": "Netselskabet Elværk A/S - 042 - Udgået"
     },
     "nke-elnet": {
       "gln": "5790001088231",
-      "consumptionCode": "94TR_C_ET",
-      "indfodningCode": "888300",
-      "companyName": "NKE-Elnet A/S",
-      "match": "manual"
+      "match": "manual",
+      "companyName": "NKE-Elnet A/S"
     },
     "noe_net": {
       "gln": "5790000395620",
-      "consumptionCode": "30030",
-      "indfodningCode": "10085",
-      "companyName": "NOE Net A/S",
-      "match": "exact"
+      "match": "exact",
+      "companyName": "NOE Net A/S"
     },
     "nord_energi_net": {
       "gln": "5790000610877",
-      "consumptionCode": "TAC",
-      "indfodningCode": "TAPRODC",
-      "companyName": "Nord Energi Net A/S",
-      "match": "exact"
+      "match": "exact",
+      "companyName": "Nord Energi Net A/S"
     },
     "radius_c": {
       "gln": "5790000705689",
-      "consumptionCode": "DT_C_01",
-      "indfodningCode": "DT_C_I",
-      "companyName": "Radius Elnet A/S",
-      "match": "exact"
+      "match": "exact",
+      "companyName": "Radius Elnet A/S"
     },
     "rah_c": {
       "gln": "5790000681327",
-      "consumptionCode": "RAH-C",
-      "indfodningCode": "INDF-CP",
-      "companyName": "RAH Net A/S",
-      "match": "fuzzy"
+      "match": "fuzzy",
+      "companyName": "RAH Net A/S - 348"
     },
     "ravdex": {
       "gln": "5790000836727",
-      "consumptionCode": "NT-C",
-      "indfodningCode": "INDC",
-      "companyName": "Ravdex A/S",
-      "match": "exact"
+      "match": "exact",
+      "companyName": "Ravdex A/S"
     },
     "sunds_net": {
       "gln": "5790001095444",
-      "consumptionCode": "SEF-NT-05",
-      "indfodningCode": "SEF-NT-31",
-      "companyName": "Sunds Net A.m.b.a",
-      "match": "exact"
+      "match": "exact",
+      "companyName": "Sunds Net A.m.b.a"
     },
     "tarm_elværk_net_as": {
       "gln": "5790000706419",
-      "consumptionCode": "TEV-NT-01T",
-      "indfodningCode": null,
-      "companyName": "Tarm Elværk Net A/S",
-      "match": "exact"
+      "match": "exact",
+      "companyName": "Tarm Elværk Net A/S"
     },
     "trefor_el-net_c": {
       "gln": "5790000392261",
-      "consumptionCode": "C",
-      "indfodningCode": "IFC",
-      "companyName": "TREFOR El-net A/S",
-      "match": "exact"
+      "match": "exact",
+      "companyName": "TREFOR El-net A/S"
     },
     "trefor_el-net_oest_c": {
       "gln": "5790000706686",
-      "consumptionCode": "46",
-      "indfodningCode": "57",
-      "companyName": "TREFOR El-net Øst A/S",
-      "match": "exact"
+      "match": "exact",
+      "companyName": "TREFOR El-Net Øst A/S"
     },
     "veksel": {
       "gln": "5790001088217",
-      "consumptionCode": "NT-01",
-      "indfodningCode": "250",
-      "companyName": "Veksel A/S",
-      "match": "exact"
+      "match": "exact",
+      "companyName": "Veksel A/S"
     },
     "vores_elnet": {
       "gln": "5790000610976",
-      "consumptionCode": "TNT1011",
-      "indfodningCode": null,
-      "companyName": "Vores Elnet A/S",
-      "match": "exact"
+      "match": "exact",
+      "companyName": "Vores Elnet A/S"
     },
     "zeanet": {
       "gln": "5790001089375",
-      "consumptionCode": "43110",
-      "indfodningCode": null,
-      "companyName": "Zeanet A/S",
-      "match": "exact"
+      "match": "exact",
+      "companyName": "Zeanet A/S"
     }
   }
 }

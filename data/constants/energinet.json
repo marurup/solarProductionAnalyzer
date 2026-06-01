@@ -3,7 +3,7 @@
     "description": "Energinets tariffer fra EDS DatahubPricelist GLN 5790000432752. Komponenter: 41000 systemtarif + 40000 transmissionsnettarif (forbrug), 40010 indfødnings + 45012 balance (produktion). Alle i kr/kWh ekskl. moms.",
     "source": "EDS DatahubPricelist",
     "sourceGln": "5790000432752",
-    "lastUpdated": "2026-05-27T12:15:25.586Z"
+    "lastUpdated": "2026-06-01T10:29:17.020Z"
   },
   "ranges": [
     {
