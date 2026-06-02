@@ -177,7 +177,20 @@ async function main() {
 
     const filePath = `data/tariffs/${gln}.json`;
     if (!FORCE_UPDATE) {
-      try { await fs.access(filePath); console.log(`  ${sup.id} (${gln}): findes, springer over`); supplierMap[sup.id] = { gln, match, companyName: sup.companyName }; continue; } catch {}
+      try {
+        const existing = JSON.parse(await fs.readFile(filePath, 'utf-8'));
+        // Læs koder fra eksisterende fil så supplier-map'en stadig er korrekt
+        supplierMap[sup.id] = {
+          gln,
+          consumptionCode: existing._meta?.consumptionCode ?? null,
+          indfodningCode:  existing._meta?.indfodningCode ?? null,
+          indfodningNote:  existing._meta?.indfodningNote ?? null,
+          companyName:     existing._meta?.chargeOwner ?? sup.companyName,
+          match,
+        };
+        console.log(`  ${sup.id} (${gln}): findes, springer over`);
+        continue;
+      } catch {}
     }
 
     console.log(`\n${sup.id} (${sup.companyName}, GLN ${gln}, match=${match}):`);
