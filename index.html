@@ -426,6 +426,7 @@
     <div class="tabs">
       <div class="tab active" data-tab="bad">Problematiske timer</div>
       <div class="tab" data-tab="monthly">Månedsoversigt</div>
+      <div class="tab" data-tab="revenue">Afregnings-validering</div>
       <div class="tab" data-tab="debug">Parser-log</div>
     </div>
 
@@ -469,6 +470,31 @@
             </tr>
           </thead>
           <tbody id="monthlyBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="tab-content" id="tab-revenue">
+      <p style="margin-bottom:16px; font-size:0.85rem; line-height:1.6">
+        Sammenlign den beregnede eksportindtægt med din faktiske månedlige udbetaling fra produktionsleverandøren.
+        Forskel kan skyldes at din aftale afregner til månedlig gennemsnitlig spotpris frem for time-for-time.
+        Klik på en måned for at se fradragsdetaljer. Beløb du indtaster gemmes lokalt i browseren.
+      </p>
+      <div class="table-wrap">
+        <table id="revenueTable">
+          <thead>
+            <tr>
+              <th>Måned</th>
+              <th>kWh eksporteret</th>
+              <th>Spotindtægt brutto</th>
+              <th>Fradrag</th>
+              <th>Beregnet netto</th>
+              <th>Faktisk udbetalt</th>
+              <th>Difference</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="revenueBody"></tbody>
         </table>
       </div>
     </div>
@@ -608,6 +634,7 @@ const state = {
   forbrugRows: null,  // [{timestamp: Date, kwh: number}] (optional)
   spotPrices: null,   // Map<string, number>  "YYYY-MM-DDTHH" => øre/kWh
   analysisData: null, // full analysis result array
+  revenueMonths: null, // Map<string, monthly aggregation> for revenue validation
   sortCol: 'tabtFortjenesteDKK',
   sortDir: -1,
   cache: new SpotPriceCache(),
@@ -1006,6 +1033,12 @@ function analyze(exportRows, spotPrices, tariffs, tariffData) {
       tabtFortjenesteDKK,
       isDaarlig: nettoEksportOere < tariffs.badThreshold,
       isWarn: nettoEksportOere >= tariffs.badThreshold && nettoEksportOere < tariffs.warnThreshold,
+      exportBreakdown: breakdown ? {
+        energinetBalanceOere: breakdown.energinetBalance * 1.25 * 100,
+        energinetIndfodningOere: breakdown.energinetIndfodning * 1.25 * 100,
+        supplierIndfodningOere: breakdown.supplierIndfodning * 1.25 * 100,
+      } : null,
+      t4Oere: tariffs.t4,
     });
   }
 
@@ -1050,6 +1083,7 @@ function renderResults(data, tariffs) {
 
   renderBadHoursTable(data, tariffs);
   renderMonthlyTable(data);
+  renderRevenueValidation(data);
   updateStepIndicator(3);
 }
 
@@ -1104,6 +1138,163 @@ function renderMonthlyTable(data) {
       <td style="color:${m.tabt > 50 ? 'var(--red)' : 'inherit'}">${fmtDKK(m.tabt)}</td>
     </tr>`
   ).join('');
+}
+
+// ─── Afregnings-validering ────────────────────────────────────────────────────
+
+const REVENUE_ACTUALS_KEY = 'solar-revenue-actuals-v1';
+
+function loadRevenueActuals() {
+  try { return JSON.parse(localStorage.getItem(REVENUE_ACTUALS_KEY) || '{}'); }
+  catch { return {}; }
+}
+
+function saveRevenueActual(monthKey, value) {
+  const actuals = loadRevenueActuals();
+  if (value === '' || value === null || isNaN(value)) delete actuals[monthKey];
+  else actuals[monthKey] = value;
+  localStorage.setItem(REVENUE_ACTUALS_KEY, JSON.stringify(actuals));
+}
+
+function buildRevenueMonths(data) {
+  const months = new Map();
+  for (const d of data) {
+    const key = d.hourKey.slice(0, 7);
+    if (!months.has(key)) months.set(key, {
+      kwh: 0, spotRevenue: 0, nettoRevenue: 0,
+      energinetBalance: 0, energinetIndfodning: 0, supplierIndfodning: 0, leverandor: 0,
+      hasBreakdown: false,
+    });
+    const m = months.get(key);
+    m.kwh += d.kwh;
+    m.spotRevenue += d.spotOere * d.kwh / 100;
+    m.nettoRevenue += d.nettoEksportOere * d.kwh / 100;
+    m.leverandor += d.t4Oere * d.kwh / 100;
+    if (d.exportBreakdown) {
+      m.energinetBalance += d.exportBreakdown.energinetBalanceOere * d.kwh / 100;
+      m.energinetIndfodning += d.exportBreakdown.energinetIndfodningOere * d.kwh / 100;
+      m.supplierIndfodning += d.exportBreakdown.supplierIndfodningOere * d.kwh / 100;
+      m.hasBreakdown = true;
+    }
+  }
+  return months;
+}
+
+function revenueDiffHtml(calculated, actualStr, smallThreshold) {
+  const actual = parseFloat(String(actualStr).replace(',', '.'));
+  if (actualStr === '' || actualStr === null || actualStr === undefined || isNaN(actual)) {
+    return '<span style="color:var(--muted)">—</span>';
+  }
+  const diff = calculated - actual;
+  const color = Math.abs(diff) <= smallThreshold ? 'var(--green)' : diff > 0 ? 'var(--accent)' : 'var(--red)';
+  return `<span style="color:${color}">${diff >= 0 ? '+' : ''}${fmtDKK(diff)}</span>`;
+}
+
+function renderRevenueValidation(data) {
+  const months = buildRevenueMonths(data);
+  state.revenueMonths = months;
+
+  const actuals = loadRevenueActuals();
+  const tbody = document.getElementById('revenueBody');
+  const entries = [...months.entries()].sort();
+
+  tbody.innerHTML = entries.map(([key, m]) => {
+    const actual = actuals[key] !== undefined ? actuals[key] : '';
+    const totalFradrag = m.spotRevenue - m.nettoRevenue;
+
+    const breakdownHtml = m.hasBreakdown ? `
+      <tr class="revenue-breakdown-row" id="bd-${key}" style="display:none">
+        <td colspan="8" style="padding:0 12px 10px 28px">
+          <div style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:12px 16px; font-size:0.82rem; display:grid; grid-template-columns:1fr auto; gap:3px 32px; max-width:380px;">
+            <span style="color:var(--muted)">Spotindtægt (brutto)</span><span style="text-align:right">${fmtDKK(m.spotRevenue)}</span>
+            <span style="color:var(--muted)">− Energinet balance</span><span style="color:var(--red); text-align:right">−${fmtDKK(m.energinetBalance)}</span>
+            <span style="color:var(--muted)">− Energinet indfødning</span><span style="color:var(--red); text-align:right">−${fmtDKK(m.energinetIndfodning)}</span>
+            <span style="color:var(--muted)">− Netselskab indfødning</span><span style="color:var(--red); text-align:right">−${fmtDKK(m.supplierIndfodning)}</span>
+            <span style="color:var(--muted)">− Leverandørgebyr (t4)</span><span style="color:var(--red); text-align:right">−${fmtDKK(m.leverandor)}</span>
+            <span style="border-top:1px solid var(--border); padding-top:6px; font-weight:600">= Beregnet netto</span>
+            <span style="border-top:1px solid var(--border); padding-top:6px; font-weight:600; text-align:right">${fmtDKK(m.nettoRevenue)}</span>
+          </div>
+        </td>
+      </tr>` : '';
+
+    return `
+      <tr onclick="toggleRevenueBreakdown('${key}')" style="cursor:${m.hasBreakdown ? 'pointer' : 'default'}">
+        <td>${fmtMonth(key)}</td>
+        <td>${m.kwh.toFixed(1)}</td>
+        <td>${fmtDKK(m.spotRevenue)}</td>
+        <td style="color:var(--red)">−${fmtDKK(totalFradrag)}</td>
+        <td style="font-weight:600">${fmtDKK(m.nettoRevenue)}</td>
+        <td onclick="event.stopPropagation()">
+          <input type="number" class="revenue-actual-input" data-month="${key}"
+            value="${actual}" placeholder="—" step="0.01" min="0"
+            style="width:88px; padding:3px 7px; font-size:0.85rem; background:var(--bg); border:1px solid var(--border); border-radius:4px; color:var(--text);">
+        </td>
+        <td id="revenue-diff-${key}">${revenueDiffHtml(m.nettoRevenue, actual, 0.5)}</td>
+        <td id="bd-toggle-${key}" style="color:var(--muted); font-size:0.75rem; user-select:none">${m.hasBreakdown ? '▶' : ''}</td>
+      </tr>
+      ${breakdownHtml}`;
+  }).join('');
+
+  let totKwh = 0, totSpot = 0, totNetto = 0, totActual = 0, allHaveActual = entries.length > 0;
+  for (const [key, m] of entries) {
+    totKwh += m.kwh;
+    totSpot += m.spotRevenue;
+    totNetto += m.nettoRevenue;
+    const a = actuals[key];
+    const parsed = parseFloat(a);
+    if (a !== undefined && a !== '' && !isNaN(parsed)) totActual += parsed;
+    else allHaveActual = false;
+  }
+
+  tbody.innerHTML += `
+    <tr id="revenue-totals-row" style="font-weight:600; border-top:2px solid var(--border)">
+      <td>Total</td>
+      <td id="revenue-tot-kwh">${totKwh.toFixed(1)}</td>
+      <td id="revenue-tot-spot">${fmtDKK(totSpot)}</td>
+      <td></td>
+      <td id="revenue-tot-netto">${fmtDKK(totNetto)}</td>
+      <td id="revenue-tot-actual">${allHaveActual ? fmtDKK(totActual) : '<span style="color:var(--muted)">—</span>'}</td>
+      <td id="revenue-tot-diff">${revenueDiffHtml(totNetto, allHaveActual ? String(totActual) : '', 1)}</td>
+      <td></td>
+    </tr>`;
+
+  document.querySelectorAll('.revenue-actual-input').forEach(input => {
+    input.addEventListener('input', e => {
+      const key = e.target.dataset.month;
+      const raw = e.target.value;
+      const val = parseFloat(raw);
+      saveRevenueActual(key, raw === '' ? '' : (isNaN(val) ? '' : val));
+      const m = state.revenueMonths.get(key);
+      if (m) document.getElementById(`revenue-diff-${key}`).innerHTML = revenueDiffHtml(m.nettoRevenue, raw, 0.5);
+      updateRevenueTotalsRow();
+    });
+  });
+}
+
+function toggleRevenueBreakdown(key) {
+  const bd = document.getElementById(`bd-${key}`);
+  const toggle = document.getElementById(`bd-toggle-${key}`);
+  if (!bd) return;
+  const open = bd.style.display !== 'none';
+  bd.style.display = open ? 'none' : 'table-row';
+  if (toggle) toggle.textContent = open ? '▶' : '▼';
+}
+
+function updateRevenueTotalsRow() {
+  if (!state.revenueMonths) return;
+  const actuals = loadRevenueActuals();
+  let totNetto = 0, totActual = 0, allHaveActual = state.revenueMonths.size > 0;
+  for (const [key, m] of state.revenueMonths.entries()) {
+    totNetto += m.nettoRevenue;
+    const a = actuals[key];
+    const parsed = parseFloat(a);
+    if (a !== undefined && a !== '' && !isNaN(parsed)) totActual += parsed;
+    else allHaveActual = false;
+  }
+  const totActualEl = document.getElementById('revenue-tot-actual');
+  const totDiffEl = document.getElementById('revenue-tot-diff');
+  if (totActualEl) totActualEl.innerHTML = allHaveActual ? fmtDKK(totActual) : '<span style="color:var(--muted)">—</span>';
+  if (totDiffEl) totDiffEl.innerHTML = revenueDiffHtml(totNetto, allHaveActual ? String(totActual) : '', 1);
 }
 
 // ─── Formatters ───────────────────────────────────────────────────────────────

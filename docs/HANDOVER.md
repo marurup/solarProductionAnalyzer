@@ -60,6 +60,10 @@ Dette dokument beskriver hele projektets nuværende tilstand, så arbejdet kan f
 - **8 netselskaber har ingen indfødningskode** (`null` i supplier-map): N1 (har faktisk `C INDF` nu — fix kom efter), Aal El-Net, Cerius, Dinel, El-net Kongerslev, Elektrus, Elinor, Elnet Midt, m.fl. — disse netselskaber har enten reelt ingen separat C-indfødning, eller auto-discovery missede det. Verificér mod Strømlignings UI eller netselskabernes egne sider. **Note:** N1 fik faktisk `C INDF` ved seneste run; lokalt vises 26/34 med kode efter merge fra eksisterende filer.
 - **Energinet 2019 og tidligere** mangler i `data/constants/energinet.json`. EDS har historik længere tilbage — udvid `fetch-energinet.mjs` til at hente mere.
 
+### Nye features (idéer)
+- **Validér produktionsafregning** — Brugeren modtager én samlet udbetaling per måned fra sin produktionsleverandør ("produktionsaftale til solceller") uden detaljeret specifikation. Appen har allerede alle nødvendige byggeklodser (D06-eksportdata, spotpriser, indfødningsfradrag per time) og kan summere en forventet månedlig afregning, som brugeren kan holde op mod den faktiske udbetaling. Kræver ny måneds-aggregerings-visning + et input-felt til "faktisk udbetalt beløb" + difference-visning.
+- **Validér elforbrug-regning** — Tilsvarende for forbrug: brugeren får kun en totalpris per måned. Appen har D07-forbrugsdata + forbrugs-tariffer + spotpriser og kan beregne en forventet regning pr. time og summere per måned. Udfordring: faste abonnements-gebyrer (abonnement til netselskab + elselskab) indgår i den rigtige regning men ikke i per-kWh-data — disse skal brugeren indtaste manuelt én gang.
+
 ### UI/UX
 - **Mobil-layout** ikke optimeret (testet kun desktop)
 - **Eksport CSV** fra resultattabel inkluderer ikke alle per-time komponenter (kun aggregerede tal)
