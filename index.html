@@ -427,6 +427,7 @@
       <div class="tab active" data-tab="bad">Problematiske timer</div>
       <div class="tab" data-tab="monthly">Månedsoversigt</div>
       <div class="tab" data-tab="revenue">Afregnings-validering</div>
+      <div class="tab" data-tab="bill">Elforbrug-validering</div>
       <div class="tab" data-tab="debug">Parser-log</div>
     </div>
 
@@ -496,6 +497,50 @@
           </thead>
           <tbody id="revenueBody"></tbody>
         </table>
+      </div>
+    </div>
+
+    <div class="tab-content" id="tab-bill">
+      <div id="bill-no-data" style="color:var(--muted); font-size:0.88rem; padding:20px 0">
+        Ingen forbrugsdata indlæst — upload en forbrugsfil (D07) og kør analysen igen.
+      </div>
+      <div id="bill-table-wrap" style="display:none">
+        <p style="margin-bottom:16px; font-size:0.85rem; line-height:1.6">
+          Sammenlign den beregnede elregning med din faktiske månedlige regning fra elselskabet.
+          Klik på en måned for komponentdetaljer. Beløb gemmes lokalt i browseren.
+        </p>
+        <div style="display:flex; gap:20px; flex-wrap:wrap; margin-bottom:20px; padding:14px 16px; background:var(--bg); border:1px solid var(--border); border-radius:8px; align-items:flex-end;">
+          <div class="field">
+            <label>Netselskab abonnement</label>
+            <input type="number" id="billNetSub" placeholder="0" min="0" step="0.01" style="width:110px">
+            <span class="field-unit">kr/md inkl. moms</span>
+          </div>
+          <div class="field">
+            <label>Elselskab abonnement</label>
+            <input type="number" id="billSupSub" placeholder="0" min="0" step="0.01" style="width:110px">
+            <span class="field-unit">kr/md inkl. moms</span>
+          </div>
+          <span style="font-size:0.82rem; color:var(--muted); max-width:300px; line-height:1.5">
+            Faste abonnementer lægges til hvert månedstotal. Lad stå tomme hvis de ikke fremgår separat på din regning.
+          </span>
+        </div>
+        <div class="table-wrap">
+          <table id="billTable">
+            <thead>
+              <tr>
+                <th>Måned</th>
+                <th>kWh forbrugt</th>
+                <th>Variabel (spot + tariffer)</th>
+                <th>Abonnement</th>
+                <th>Beregnet total</th>
+                <th>Faktisk regning</th>
+                <th>Difference</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="billBody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -634,7 +679,8 @@ const state = {
   forbrugRows: null,  // [{timestamp: Date, kwh: number}] (optional)
   spotPrices: null,   // Map<string, number>  "YYYY-MM-DDTHH" => øre/kWh
   analysisData: null, // full analysis result array
-  revenueMonths: null, // Map<string, monthly aggregation> for revenue validation
+  revenueMonths: null,     // Map<string, monthly aggregation> for revenue validation
+  consumptionMonths: null, // Map<string, monthly aggregation> for bill validation
   sortCol: 'tabtFortjenesteDKK',
   sortDir: -1,
   cache: new SpotPriceCache(),
@@ -1052,6 +1098,51 @@ function analyze(exportRows, spotPrices, tariffs, tariffData) {
   return results;
 }
 
+function analyzeConsumption(forbrugRows, spotPrices, tariffData, tariffs) {
+  const hasPerHourData = !!(tariffData?.supplier?.consumption?.length && tariffData?.energinet && tariffData?.elafgift);
+  const months = new Map();
+  let missingPrices = 0, incompleteRows = 0;
+
+  for (const row of forbrugRows) {
+    if (row.kwh <= 0) continue;
+    const spotOere = spotPrices.get(row.hourKey);
+    if (spotOere === undefined) { missingPrices++; continue; }
+
+    const key = row.hourKey.slice(0, 7);
+    if (!months.has(key)) months.set(key, {
+      kwh: 0, spotCost: 0,
+      distribution: 0, systemTariff: 0, transmission: 0, elafgift: 0, markup: 0,
+      totalVariable: 0, hasBreakdown: false,
+    });
+    const m = months.get(key);
+    m.kwh += row.kwh;
+
+    const spotKr = spotOere / 100 * 1.25; // kr/kWh incl. moms
+    m.spotCost += spotKr * row.kwh;
+
+    if (hasPerHourData) {
+      const c = lookupHourlyComponents(row.hourKey, tariffData);
+      if (!c.dataComplete) incompleteRows++;
+      const vat = 1.25;
+      m.distribution += c.distribution         * vat * row.kwh;
+      m.systemTariff += c.systemTariff          * vat * row.kwh;
+      m.transmission += c.transmissionNetTariff * vat * row.kwh;
+      m.elafgift     += c.elafgift              * vat * row.kwh;
+      m.markup       += c.markup                * vat * row.kwh;
+      m.totalVariable += (spotKr + (c.distribution + c.systemTariff + c.transmissionNetTariff + c.elafgift + c.markup) * vat) * row.kwh;
+      m.hasBreakdown = true;
+    } else {
+      // selfConsumpOverhead er i øre/kWh inkl. moms
+      m.totalVariable += (spotOere * 1.25 + tariffs.selfConsumpOverhead) / 100 * row.kwh;
+    }
+  }
+
+  if (missingPrices) log.warn(`Elforbrug: ${missingPrices} timer manglede spotpris — sprunget over`);
+  if (incompleteRows) log.warn(`Elforbrug: ${incompleteRows} timer med ufuldstændige tariff-data`);
+  log.info(`Elforbrug-analyse: ${months.size} måneder (${hasPerHourData ? 'per-time tariff aktiv' : 'manuel tariff-overhead'})`);
+  return months;
+}
+
 // ─── Rendering ────────────────────────────────────────────────────────────────
 
 function renderResults(data, tariffs) {
@@ -1084,6 +1175,7 @@ function renderResults(data, tariffs) {
   renderBadHoursTable(data, tariffs);
   renderMonthlyTable(data);
   renderRevenueValidation(data);
+  renderBillValidation();
   updateStepIndicator(3);
 }
 
@@ -1295,6 +1387,159 @@ function updateRevenueTotalsRow() {
   const totDiffEl = document.getElementById('revenue-tot-diff');
   if (totActualEl) totActualEl.innerHTML = allHaveActual ? fmtDKK(totActual) : '<span style="color:var(--muted)">—</span>';
   if (totDiffEl) totDiffEl.innerHTML = revenueDiffHtml(totNetto, allHaveActual ? String(totActual) : '', 1);
+}
+
+// ─── Elforbrug-validering ─────────────────────────────────────────────────────
+
+const BILL_CONFIG_KEY  = 'solar-bill-config-v1';
+const BILL_ACTUALS_KEY = 'solar-bill-actuals-v1';
+
+function loadBillConfig() {
+  try { return JSON.parse(localStorage.getItem(BILL_CONFIG_KEY) || '{}'); }
+  catch { return {}; }
+}
+function saveBillConfig(patch) {
+  localStorage.setItem(BILL_CONFIG_KEY, JSON.stringify({ ...loadBillConfig(), ...patch }));
+}
+function loadBillActuals() {
+  try { return JSON.parse(localStorage.getItem(BILL_ACTUALS_KEY) || '{}'); }
+  catch { return {}; }
+}
+function saveBillActual(monthKey, value) {
+  const actuals = loadBillActuals();
+  if (value === '' || value === null || isNaN(value)) delete actuals[monthKey];
+  else actuals[monthKey] = value;
+  localStorage.setItem(BILL_ACTUALS_KEY, JSON.stringify(actuals));
+}
+
+function renderBillValidation() {
+  const noData    = document.getElementById('bill-no-data');
+  const tableWrap = document.getElementById('bill-table-wrap');
+
+  if (!state.consumptionMonths?.size) {
+    noData.style.display    = 'block';
+    tableWrap.style.display = 'none';
+    return;
+  }
+  noData.style.display    = 'none';
+  tableWrap.style.display = 'block';
+
+  const cfg = loadBillConfig();
+  const netSub = parseFloat(cfg.netSubscription) || 0;
+  const supSub = parseFloat(cfg.supplierSubscription) || 0;
+  const totalSubPerMonth = netSub + supSub;
+
+  const actuals = loadBillActuals();
+  const months  = state.consumptionMonths;
+  const entries = [...months.entries()].sort();
+  const tbody   = document.getElementById('billBody');
+
+  tbody.innerHTML = entries.map(([key, m]) => {
+    const actual    = actuals[key] !== undefined ? actuals[key] : '';
+    const totalCalc = m.totalVariable + totalSubPerMonth;
+
+    const breakdownHtml = m.hasBreakdown ? `
+      <tr id="bill-bd-${key}" style="display:none">
+        <td colspan="8" style="padding:0 12px 10px 28px">
+          <div style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:12px 16px; font-size:0.82rem; display:grid; grid-template-columns:1fr auto; gap:3px 32px; max-width:420px;">
+            <span style="color:var(--muted)">Spot (inkl. moms)</span><span style="text-align:right">${fmtDKK(m.spotCost)}</span>
+            <span style="color:var(--muted)">Nettarif / distribution</span><span style="text-align:right">${fmtDKK(m.distribution)}</span>
+            <span style="color:var(--muted)">Energinet systemtarif</span><span style="text-align:right">${fmtDKK(m.systemTariff)}</span>
+            <span style="color:var(--muted)">Energinet transmissionstarif</span><span style="text-align:right">${fmtDKK(m.transmission)}</span>
+            <span style="color:var(--muted)">Elafgift</span><span style="text-align:right">${fmtDKK(m.elafgift)}</span>
+            <span style="color:var(--muted)">Leverandørtillæg</span><span style="text-align:right">${fmtDKK(m.markup)}</span>
+            <span style="border-top:1px solid var(--border); padding-top:6px">= Variabel total</span>
+            <span style="border-top:1px solid var(--border); padding-top:6px; text-align:right">${fmtDKK(m.totalVariable)}</span>
+            ${totalSubPerMonth > 0 ? `<span style="color:var(--muted)">+ Abonnement</span><span style="text-align:right">${fmtDKK(totalSubPerMonth)}</span>` : ''}
+            <span style="border-top:1px solid var(--border); padding-top:6px; font-weight:600">= Beregnet total</span>
+            <span style="border-top:1px solid var(--border); padding-top:6px; font-weight:600; text-align:right">${fmtDKK(totalCalc)}</span>
+          </div>
+        </td>
+      </tr>` : '';
+
+    return `
+      <tr onclick="toggleBillBreakdown('${key}')" style="cursor:${m.hasBreakdown ? 'pointer' : 'default'}">
+        <td>${fmtMonth(key)}</td>
+        <td>${m.kwh.toFixed(1)}</td>
+        <td>${fmtDKK(m.totalVariable)}</td>
+        <td>${totalSubPerMonth > 0 ? fmtDKK(totalSubPerMonth) : '<span style="color:var(--muted)">—</span>'}</td>
+        <td style="font-weight:600">${fmtDKK(totalCalc)}</td>
+        <td onclick="event.stopPropagation()">
+          <input type="number" class="bill-actual-input" data-month="${key}"
+            value="${actual}" placeholder="—" step="0.01" min="0"
+            style="width:88px; padding:3px 7px; font-size:0.85rem; background:var(--bg); border:1px solid var(--border); border-radius:4px; color:var(--text);">
+        </td>
+        <td id="bill-diff-${key}">${revenueDiffHtml(totalCalc, actual, 1)}</td>
+        <td id="bill-bd-toggle-${key}" style="color:var(--muted); font-size:0.75rem; user-select:none">${m.hasBreakdown ? '▶' : ''}</td>
+      </tr>
+      ${breakdownHtml}`;
+  }).join('');
+
+  let totKwh = 0, totVar = 0, totCalc = 0, totActual = 0, allHaveActual = entries.length > 0;
+  for (const [key, m] of entries) {
+    totKwh   += m.kwh;
+    totVar   += m.totalVariable;
+    totCalc  += m.totalVariable + totalSubPerMonth;
+    const a   = actuals[key];
+    const p   = parseFloat(a);
+    if (a !== undefined && a !== '' && !isNaN(p)) totActual += p;
+    else allHaveActual = false;
+  }
+
+  tbody.innerHTML += `
+    <tr id="bill-totals-row" style="font-weight:600; border-top:2px solid var(--border)">
+      <td>Total</td>
+      <td id="bill-tot-kwh">${totKwh.toFixed(1)}</td>
+      <td id="bill-tot-var">${fmtDKK(totVar)}</td>
+      <td></td>
+      <td id="bill-tot-calc">${fmtDKK(totCalc)}</td>
+      <td id="bill-tot-actual">${allHaveActual ? fmtDKK(totActual) : '<span style="color:var(--muted)">—</span>'}</td>
+      <td id="bill-tot-diff">${revenueDiffHtml(totCalc, allHaveActual ? String(totActual) : '', 5)}</td>
+      <td></td>
+    </tr>`;
+
+  document.querySelectorAll('.bill-actual-input').forEach(input => {
+    input.addEventListener('input', e => {
+      const key = e.target.dataset.month;
+      const raw = e.target.value;
+      const val = parseFloat(raw);
+      saveBillActual(key, raw === '' ? '' : (isNaN(val) ? '' : val));
+      const m = state.consumptionMonths.get(key);
+      const cfg2 = loadBillConfig();
+      const sub = (parseFloat(cfg2.netSubscription) || 0) + (parseFloat(cfg2.supplierSubscription) || 0);
+      if (m) document.getElementById(`bill-diff-${key}`).innerHTML = revenueDiffHtml(m.totalVariable + sub, raw, 1);
+      updateBillTotalsRow();
+    });
+  });
+}
+
+function toggleBillBreakdown(key) {
+  const bd     = document.getElementById(`bill-bd-${key}`);
+  const toggle = document.getElementById(`bill-bd-toggle-${key}`);
+  if (!bd) return;
+  const open = bd.style.display !== 'none';
+  bd.style.display = open ? 'none' : 'table-row';
+  if (toggle) toggle.textContent = open ? '▶' : '▼';
+}
+
+function updateBillTotalsRow() {
+  if (!state.consumptionMonths) return;
+  const actuals = loadBillActuals();
+  const cfg = loadBillConfig();
+  const sub = (parseFloat(cfg.netSubscription) || 0) + (parseFloat(cfg.supplierSubscription) || 0);
+  let totCalc = 0, totActual = 0, allHaveActual = state.consumptionMonths.size > 0;
+  for (const [key, m] of state.consumptionMonths.entries()) {
+    totCalc += m.totalVariable + sub;
+    const a = actuals[key], p = parseFloat(a);
+    if (a !== undefined && a !== '' && !isNaN(p)) totActual += p;
+    else allHaveActual = false;
+  }
+  const calcEl   = document.getElementById('bill-tot-calc');
+  const actualEl = document.getElementById('bill-tot-actual');
+  const diffEl   = document.getElementById('bill-tot-diff');
+  if (calcEl)   calcEl.textContent  = fmtDKK(totCalc);
+  if (actualEl) actualEl.innerHTML  = allHaveActual ? fmtDKK(totActual) : '<span style="color:var(--muted)">—</span>';
+  if (diffEl)   diffEl.innerHTML    = revenueDiffHtml(totCalc, allHaveActual ? String(totActual) : '', 5);
 }
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
@@ -2094,11 +2339,19 @@ document.getElementById('btnAnalyze').addEventListener('click', async () => {
 
   try {
     const rows = state.exportRows;
-    const startDay = rows[0].hourKey.slice(0, 10);
-    const endDay = rows[rows.length - 1].hourKey.slice(0, 10);
     const priceArea = document.getElementById('priceArea').value;
 
-    log.info(`Analyse startet: ${rows.length} timer, ${startDay} → ${endDay}, ${priceArea}`);
+    // Fetch range covers both export and forbrug (if loaded) to avoid missing hours
+    let fetchStart = rows[0].hourKey.slice(0, 10);
+    let fetchEnd   = rows[rows.length - 1].hourKey.slice(0, 10);
+    if (state.forbrugRows?.length) {
+      const fs = state.forbrugRows[0].hourKey.slice(0, 10);
+      const fe = state.forbrugRows[state.forbrugRows.length - 1].hourKey.slice(0, 10);
+      if (fs < fetchStart) fetchStart = fs;
+      if (fe > fetchEnd)   fetchEnd   = fe;
+    }
+
+    log.info(`Analyse startet: ${rows.length} timer, ${fetchStart} → ${fetchEnd}, ${priceArea}`);
     statusText.textContent = `Tjekker cache...`;
 
     // Åbn debug-tab med det samme så log er synlig under loading
@@ -2108,12 +2361,16 @@ document.getElementById('btnAnalyze').addEventListener('click', async () => {
     document.querySelector('.tab[data-tab="debug"]').classList.add('active');
     document.getElementById('tab-debug').classList.add('active');
 
-    const spotPrices = await fetchSpotPrices(startDay, endDay, priceArea);
+    const spotPrices = await fetchSpotPrices(fetchStart, fetchEnd, priceArea);
     state.spotPrices = spotPrices;
 
     statusText.textContent = 'Analyserer data...';
     const data = analyze(rows, spotPrices, tariffs, state.tariffData);
     state.analysisData = data;
+
+    state.consumptionMonths = state.forbrugRows?.length
+      ? analyzeConsumption(state.forbrugRows, spotPrices, state.tariffData, tariffs)
+      : null;
 
     statusText.textContent = `Analyse færdig — ${data.length} timer analyseret`;
     renderResults(data, tariffs);
@@ -2184,6 +2441,24 @@ document.getElementById('lightbox').addEventListener('click', () =>
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') document.getElementById('lightbox').classList.remove('open');
 });
+
+// Bill subscription inputs — pre-fill from localStorage + re-render table on change
+(function initBillSubscriptionInputs() {
+  const cfg = loadBillConfig();
+  if (cfg.netSubscription !== undefined) document.getElementById('billNetSub').value = cfg.netSubscription;
+  if (cfg.supplierSubscription !== undefined) document.getElementById('billSupSub').value = cfg.supplierSubscription;
+
+  document.getElementById('billNetSub').addEventListener('input', e => {
+    const v = e.target.value;
+    saveBillConfig({ netSubscription: v === '' ? '' : parseFloat(v) || 0 });
+    if (state.consumptionMonths) renderBillValidation();
+  });
+  document.getElementById('billSupSub').addEventListener('input', e => {
+    const v = e.target.value;
+    saveBillConfig({ supplierSubscription: v === '' ? '' : parseFloat(v) || 0 });
+    if (state.consumptionMonths) renderBillValidation();
+  });
+})();
 
 // Guide arrow rotation
 document.getElementById('guideDetails').addEventListener('toggle', function() {
