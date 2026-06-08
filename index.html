@@ -1820,21 +1820,29 @@ productSelect.addEventListener('change', onProductChange);
 // ─── Statisk tariff-data: indlæs supplier-map + per-netselskab + constants ───
 
 async function loadStaticTariffData(supplierId) {
+  log.info(`Henter tariff-data for netselskab: ${supplierId}`);
   try {
     const mapResp = await fetch('data/tariffs/_supplier-map.json', { cache: 'no-cache' });
-    if (!mapResp.ok) return null;
+    if (!mapResp.ok) {
+      log.warn(`Kunne ikke hente supplier-map (HTTP ${mapResp.status})`);
+      return null;
+    }
     const map = await mapResp.json();
     const sup = map.suppliers?.[supplierId];
     if (!sup) {
       log.info(`Netselskab ${supplierId} har ikke historisk tariff-data endnu — bruger manuel overhead`);
       return null;
     }
+    log.info(`Fandt ${supplierId} i map → GLN ${sup.gln}, henter tariff-filer...`);
     const [tariffResp, eneResp, taxResp] = await Promise.all([
       fetch(`data/tariffs/${sup.gln}.json`, { cache: 'no-cache' }),
       fetch('data/constants/energinet.json', { cache: 'no-cache' }),
       fetch('data/constants/elafgift.json', { cache: 'no-cache' }),
     ]);
-    if (!tariffResp.ok || !eneResp.ok || !taxResp.ok) return null;
+    if (!tariffResp.ok || !eneResp.ok || !taxResp.ok) {
+      log.warn(`Tariff-fil HTTP fejl: tariff=${tariffResp.status}, energinet=${eneResp.status}, elafgift=${taxResp.status}`);
+      return null;
+    }
     const [supplier, energinet, elafgift] = await Promise.all([
       tariffResp.json(), eneResp.json(), taxResp.json(),
     ]);
@@ -1951,7 +1959,9 @@ async function applyQuickConfig() {
     }
 
     qcStatus.style.color = 'var(--green)';
-    const perHourBadge = staticData ? ' <span style="background:rgba(34,197,94,0.2); color:var(--green); padding:1px 6px; border-radius:3px; font-size:0.75rem;">per-time aktiv</span>' : '';
+    const perHourBadge = staticData
+      ? ' <span style="background:rgba(34,197,94,0.2); color:var(--green); padding:1px 6px; border-radius:3px; font-size:0.75rem;">per-time aktiv</span>'
+      : ` <span style="color:var(--muted); font-size:0.8rem;">(netselskab: ${cfg.supplierId || '?'} — se log for detaljer)</span>`;
     qcStatus.innerHTML = `✓ Tariff-overhead sat til <strong>${avgOverhead} øre/kWh</strong> (gns. over ${n} kvartérer)${perHourBadge}. <a href="#" id="qcShowDetails" style="color:var(--accent)">Vis udregning</a>`;
     document.getElementById('qcShowDetails').addEventListener('click', e => {
       e.preventDefault();
@@ -2279,6 +2289,7 @@ function handleFile(file, dropId, label, onLoad) {
     const { rows, meterIds, meterInfo, resolution } = parsed;
     if (!rows.length) return;
 
+    log.info(`${label}: ${meterIds.length} målepunkt(er), zone=${dropId}`);
     if (meterIds.length > 1) {
       // For the export drop zone: if exactly one D06 meter exists, auto-confirm it
       // without requiring the user to click through the selector.
