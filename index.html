@@ -1838,7 +1838,7 @@ async function loadStaticTariffData(supplierId) {
     const [supplier, energinet, elafgift] = await Promise.all([
       tariffResp.json(), eneResp.json(), taxResp.json(),
     ]);
-    log.info(`Tariff-data indlæst: ${sup.companyName} (${supplier.records.length} historiske perioder)`);
+    log.info(`Tariff-data indlæst: ${sup.companyName} (${supplier.consumption?.length ?? 0} forbrugs-, ${supplier.indfodning?.length ?? 0} indfødnings-perioder)`);
     return { supplier, energinet, elafgift, mapEntry: sup };
   } catch (e) {
     log.warn(`Kunne ikke indlæse statisk tariff-data: ${e.message}`);
@@ -2280,6 +2280,36 @@ function handleFile(file, dropId, label, onLoad) {
     if (!rows.length) return;
 
     if (meterIds.length > 1) {
+      // For the export drop zone: if exactly one D06 meter exists, auto-confirm it
+      // without requiring the user to click through the selector.
+      if (dropId === 'dropExport') {
+        const d06Id = meterIds.find(id => meterInfo.get(id)?.meterTypeCode === 'D06');
+        if (d06Id) {
+          const finalRows = processRows(rows, resolution, d06Id);
+          log.info(`Auto-valgt eksport: ${d06Id} (D06 — Leveret til net)`);
+          onLoad(finalRows);
+          updateDropStatus(dropId, finalRows);
+
+          // Auto-load D07/forbrug from same file
+          const forbrugKeywords = ['forbrugt', 'forbrug', 'aftag'];
+          const d07Id =
+            meterIds.find(id => id !== d06Id && meterInfo.get(id)?.meterTypeCode === 'D07') ||
+            meterIds.find(id => id !== d06Id && meterInfo.get(id)?.meterTypeCode === 'E17') ||
+            meterIds.find(id => id !== d06Id && forbrugKeywords.some(k => (meterInfo.get(id)?.type || '').toLowerCase().includes(k)));
+          if (d07Id) {
+            const forbrugRows = processRows(rows, resolution, d07Id);
+            if (forbrugRows.length > 0) {
+              state.forbrugRows = forbrugRows;
+              updateDropStatus('dropForbrug', forbrugRows);
+              log.info(`Auto-indlæst forbrug: ${d07Id} (${meterInfo.get(d07Id)?.meterTypeCode || meterInfo.get(d07Id)?.type})`);
+            }
+          }
+          checkReady();
+          return;
+        }
+      }
+
+      // Ambiguous: show manual selector so user picks the right meter
       const drop = document.getElementById(dropId);
       drop.classList.add('loaded');
       const statusEl = drop.querySelector('.drop-status');
@@ -2287,7 +2317,6 @@ function handleFile(file, dropId, label, onLoad) {
       statusEl.style.color = 'var(--accent)';
       statusEl.textContent = `⚠ ${meterIds.length} målepunkter — vælg ét nedenfor`;
 
-      // When uploading to the export zone: also watch for a forbrug meter in the same file
       const onAutoForbrug = dropId === 'dropExport' ? (forbrugId) => {
         const forbrugRows = processRows(rows, resolution, forbrugId);
         if (forbrugRows.length > 0) {
