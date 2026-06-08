@@ -39,6 +39,10 @@
 
     .loading { color: var(--muted); font-size: 0.85rem; font-style: italic; }
     .empty   { color: var(--muted); font-size: 0.85rem; }
+    details summary::-webkit-details-marker { display: none; }
+    details summary::marker { display: none; }
+    details > summary::before { content: '▶'; font-size: 0.65rem; color: var(--muted); margin-right: 8px; transition: transform 0.15s; display: inline-block; }
+    details[open] > summary::before { transform: rotate(90deg); }
     .month-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; max-height: 140px; overflow-y: auto; }
     .month-pill { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px; font-size: 0.75rem; color: var(--muted); }
 
@@ -188,6 +192,22 @@ async function loadManifest() {
 }
 
 // ─── Tariff-data ─────────────────────────────────────────────────────────────
+
+// Group consecutive hours with the same price → "kl. 00-06: X øre · kl. 06-17: Y øre"
+function compressHourlyPrices(prices) {
+  const groups = [];
+  let start = 0;
+  for (let i = 1; i <= 24; i++) {
+    if (i === 24 || Math.abs(prices[i] - prices[start]) > 1e-9) {
+      groups.push({ start, end: i - 1, price: prices[start] });
+      start = i;
+    }
+  }
+  return groups.map(g =>
+    `kl. ${String(g.start).padStart(2,'0')}-${String(g.end + 1).padStart(2,'0')}: <strong>${(g.price * 1.25 * 100).toFixed(2).replace('.', ',')} øre</strong>`
+  ).join(' &nbsp;·&nbsp; ');
+}
+
 async function loadTariffStats() {
   const el = document.getElementById('tariffStats');
   try {
@@ -204,32 +224,56 @@ async function loadTariffStats() {
     const supplierBlocks = await Promise.all(suppliers.map(async ([id, info]) => {
       try {
         const r = await fetch(`data/tariffs/${info.gln}.json`, { cache: 'no-cache' });
-        if (!r.ok) return `<tr><td colspan="4" style="color:var(--accent)">${id}: tariff-fil mangler (${r.status})</td></tr>`;
+        if (!r.ok) return `<div style="padding:10px 0; color:var(--accent)">${info.companyName || id}: tariff-fil mangler (HTTP ${r.status})</div>`;
         const d = await r.json();
         const cFirst = d.consumption[d.consumption.length - 1]?.validFrom?.slice(0,10) || '—';
         const cLast  = d.consumption[0]?.validTo?.slice(0,10) || 'open';
-        const iFirst = d.indfodning.length ? d.indfodning[d.indfodning.length - 1]?.validFrom?.slice(0,10) : '—';
-        const iLast  = d.indfodning.length ? (d.indfodning[0]?.validTo?.slice(0,10) || 'open') : '—';
-        return `<tr>
-          <td style="padding:6px 12px 6px 0;"><strong>${info.companyName || id}</strong><br><span style="font-size:0.75rem; color:var(--muted)">${id} · GLN ${info.gln}</span></td>
-          <td>${d.consumption.length} perioder<br><span style="font-size:0.75rem; color:var(--muted)">${cFirst} → ${cLast}</span></td>
-          <td>${d.indfodning.length} perioder<br><span style="font-size:0.75rem; color:var(--muted)">${d.indfodning.length ? `${iFirst} → ${iLast}` : '—'}</span></td>
-          <td style="font-size:0.78rem; color:var(--muted)">forbrug: <code>${info.consumptionCode}</code><br>indfødn: <code>${info.indfodningCode || '—'}</code></td>
-        </tr>`;
-      } catch { return `<tr><td colspan="4">${id}: fejl</td></tr>`; }
+
+        const consRows = d.consumption.map(p => {
+          const vf = p.validFrom.slice(0,10);
+          const vt = p.validTo ? p.validTo.slice(0,10) : 'open';
+          return `<tr>
+            <td style="padding:4px 16px 4px 0; color:var(--muted); white-space:nowrap; vertical-align:top; font-size:0.8rem;">${vf} → ${vt}</td>
+            <td style="padding:4px 0; font-size:0.82rem; line-height:1.7;">${compressHourlyPrices(p.prices)}</td>
+          </tr>`;
+        }).join('');
+
+        const indfRows = d.indfodning.length
+          ? d.indfodning.map(p => {
+              const vf = p.validFrom.slice(0,10);
+              const vt = p.validTo ? p.validTo.slice(0,10) : 'open';
+              const v  = (p.prices[0] * 1.25 * 100).toFixed(3).replace('.', ',');
+              return `<tr>
+                <td style="padding:4px 16px 4px 0; color:var(--muted); white-space:nowrap; font-size:0.8rem;">${vf} → ${vt}</td>
+                <td style="padding:4px 0; font-size:0.82rem;"><strong>${v} øre/kWh</strong> inkl. moms</td>
+              </tr>`;
+            }).join('')
+          : `<tr><td colspan="2" style="padding:4px 0; color:var(--muted); font-size:0.8rem; font-style:italic;">Ingen separat indfødningstarif</td></tr>`;
+
+        return `<details style="border-bottom:1px solid var(--border);">
+          <summary style="padding:10px 0; cursor:pointer; display:flex; justify-content:space-between; align-items:baseline; gap:12px; list-style:none; user-select:none;">
+            <span>
+              <strong>${info.companyName || id}</strong>
+              <span style="font-size:0.75rem; color:var(--muted); margin-left:8px;">${id} · GLN ${info.gln}</span>
+            </span>
+            <span style="font-size:0.78rem; color:var(--muted); white-space:nowrap; flex-shrink:0;">
+              ${d.consumption.length} perioder &nbsp;${cFirst} → ${cLast}
+              &nbsp;·&nbsp; forbrug: <code>${info.consumptionCode}</code>${info.indfodningCode ? ` &nbsp;·&nbsp; indfødn: <code>${info.indfodningCode}</code>` : ''}
+            </span>
+          </summary>
+          <div style="padding:0 0 16px 12px;">
+            <div style="font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">Forbrugstarif (inkl. moms)</div>
+            <table style="width:100%; border-collapse:collapse; margin-bottom:14px;">${consRows}</table>
+            <div style="font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">Indfødningstarif (inkl. moms)</div>
+            <table style="width:100%; border-collapse:collapse;">${indfRows}</table>
+          </div>
+        </details>`;
+      } catch (e) { return `<div style="padding:10px 0; color:var(--accent)">${id}: fejl (${e.message})</div>`; }
     }));
 
     el.innerHTML = `
-      <h3 style="margin-bottom:8px">Netselskaber (${suppliers.length})</h3>
-      <table style="width:100%; font-size:0.85rem; border-collapse:collapse; margin-bottom:18px;">
-        <thead><tr style="border-bottom:1px solid var(--border); color:var(--muted);">
-          <th style="text-align:left; padding:4px 0; font-weight:normal; font-size:0.78rem;">Netselskab</th>
-          <th style="text-align:left; padding:4px 0; font-weight:normal; font-size:0.78rem;">Forbrugstarif</th>
-          <th style="text-align:left; padding:4px 0; font-weight:normal; font-size:0.78rem;">Indfødnings-tarif</th>
-          <th style="text-align:left; padding:4px 0; font-weight:normal; font-size:0.78rem;">EDS-koder</th>
-        </tr></thead>
-        <tbody>${supplierBlocks.join('')}</tbody>
-      </table>
+      <h3 style="margin-bottom:10px">Netselskaber (${suppliers.length})</h3>
+      <div style="margin-bottom:18px; border-top:1px solid var(--border);">${supplierBlocks.join('')}</div>
 
       <h3 style="margin-bottom:8px">Energinets eltariffer (${ene.ranges?.length || 0} perioder) <span style="text-transform:none; color:var(--muted); font-weight:400;">— øre/kWh ekskl. moms</span></h3>
       <p style="font-size:0.8rem; color:var(--muted); margin-bottom:10px;">Energinets terminologi: <em>nettarif</em> + <em>systemtarif</em> betales af forbrugere; <em>indfødningstarif</em> + <em>balancetarif</em> betales af producenter. Begge sider betales pr. forbrugt/produceret kWh fra/til kollektivt net.</p>
