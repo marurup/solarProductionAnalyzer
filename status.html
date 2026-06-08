@@ -41,8 +41,18 @@
     .empty   { color: var(--muted); font-size: 0.85rem; }
     details summary::-webkit-details-marker { display: none; }
     details summary::marker { display: none; }
-    details > summary::before { content: '▶'; font-size: 0.65rem; color: var(--muted); margin-right: 8px; transition: transform 0.15s; display: inline-block; }
+    details > summary {
+      display: flex; align-items: baseline; gap: 0; padding: 10px 0;
+      cursor: pointer; user-select: none; list-style: none;
+    }
+    details > summary::before {
+      content: '▶'; font-size: 0.6rem; color: var(--muted);
+      flex: 0 0 18px; align-self: center;
+      transition: transform 0.15s; display: inline-block;
+    }
     details[open] > summary::before { transform: rotate(90deg); }
+    .sum-name { flex: 0 0 38%; min-width: 0; padding-right: 12px; }
+    .sum-info { flex: 1; min-width: 0; font-size: 0.78rem; color: var(--muted); }
     .month-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; max-height: 140px; overflow-y: auto; }
     .month-pill { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px; font-size: 0.75rem; color: var(--muted); }
 
@@ -251,13 +261,14 @@ async function loadTariffStats() {
           : `<tr><td colspan="2" style="padding:4px 0; color:var(--muted); font-size:0.8rem; font-style:italic;">Ingen separat indfødningstarif</td></tr>`;
 
         return `<details style="border-bottom:1px solid var(--border);">
-          <summary style="padding:10px 0; cursor:pointer; display:flex; justify-content:space-between; align-items:baseline; gap:12px; list-style:none; user-select:none;">
-            <span>
+          <summary>
+            <span class="sum-name">
               <strong>${info.companyName || id}</strong>
-              <span style="font-size:0.75rem; color:var(--muted); margin-left:8px;">${id} · GLN ${info.gln}</span>
+              <span style="font-size:0.75rem; color:var(--muted); margin-left:6px;">${id}</span>
             </span>
-            <span style="font-size:0.78rem; color:var(--muted); white-space:nowrap; flex-shrink:0;">
-              ${d.consumption.length} perioder &nbsp;${cFirst} → ${cLast}
+            <span class="sum-info">
+              ${d.consumption.length} perioder &nbsp;·&nbsp; ${cFirst} → ${cLast}
+              &nbsp;·&nbsp; GLN ${info.gln}
               &nbsp;·&nbsp; forbrug: <code>${info.consumptionCode}</code>${info.indfodningCode ? ` &nbsp;·&nbsp; indfødn: <code>${info.indfodningCode}</code>` : ''}
             </span>
           </summary>
