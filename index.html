@@ -1959,10 +1959,10 @@ async function applyQuickConfig() {
     }
 
     qcStatus.style.color = 'var(--green)';
-    const perHourBadge = staticData
-      ? ' <span style="background:rgba(34,197,94,0.2); color:var(--green); padding:1px 6px; border-radius:3px; font-size:0.75rem;">per-time aktiv</span>'
-      : ` <span style="color:var(--muted); font-size:0.8rem;">(netselskab: ${cfg.supplierId || '?'} — se log for detaljer)</span>`;
-    qcStatus.innerHTML = `✓ Tariff-overhead sat til <strong>${avgOverhead} øre/kWh</strong> (gns. over ${n} kvartérer)${perHourBadge}. <a href="#" id="qcShowDetails" style="color:var(--accent)">Vis udregning</a>`;
+    const statusMsg = staticData
+      ? `✓ <span style="background:rgba(34,197,94,0.2); color:var(--green); padding:1px 6px; border-radius:3px; font-size:0.75rem;">per-time aktiv</span> <strong>${staticData.mapEntry.companyName}</strong> — analysen bruger historiske rates per CSV-time. Gennemsnittet (${avgOverhead} øre/kWh) bruges ikke.`
+      : `✓ Tariff-overhead sat til <strong>${avgOverhead} øre/kWh</strong> (gns. over ${n} kvartérer) <span style="color:var(--muted); font-size:0.8rem;">(netselskab: ${cfg.supplierId || '?'} — se log for detaljer)</span>`;
+    qcStatus.innerHTML = `${statusMsg} <a href="#" id="qcShowDetails" style="color:var(--accent)">Vis udregning</a>`;
     document.getElementById('qcShowDetails').addEventListener('click', e => {
       e.preventDefault();
       const det = document.getElementById('overheadDetails');
