@@ -186,6 +186,7 @@
 
     /* Table */
     .table-wrap { overflow-x: auto; }
+    .col-help code { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-size: 0.9em; color: var(--text); white-space: nowrap; }
     table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
     th { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; cursor: pointer; user-select: none; }
     th.th-static { cursor: default; }
@@ -493,6 +494,21 @@
         <div class="spacer"></div>
         <button class="btn btn-secondary" id="btnExportCSV" style="font-size:0.82rem; padding:6px 14px;">Eksporter CSV</button>
       </div>
+
+      <details class="col-help" style="margin-bottom:14px; background:var(--bg); border:1px solid var(--border); border-radius:8px; overflow:hidden;">
+        <summary style="cursor:pointer; padding:10px 14px; font-size:0.85rem; color:var(--accent); font-weight:500; user-select:none;">Forklaring af kolonnerne</summary>
+        <div style="padding:4px 14px 12px; font-size:0.85rem; color:var(--muted); line-height:1.55;">
+          <p style="margin:8px 0;"><strong style="color:var(--text)">Dato/tid</strong> — timen eksporten skete. Alle tal på rækken gælder netop denne ene time (15-min-data er lagt sammen til timer).</p>
+          <p style="margin:8px 0;"><strong style="color:var(--text)">kWh eksporteret</strong> — mængde strøm leveret til nettet i timen (D06 fra din eloverblik-CSV).</p>
+          <p style="margin:8px 0;"><strong style="color:var(--text)">Spotpris (øre)</strong> — rå spotpris (Nord Pool via Energi Data Service) for timen, i øre/kWh <em>uden moms</em>. Grundlag for alle øvrige beregninger.</p>
+          <p style="margin:8px 0;"><strong style="color:var(--text)">Netto eksport (øre)</strong> — hvad du reelt får for at sælge 1 kWh: <code>spotpris − produktionsfradrag</code>. Fradragene er Energinets balance- og indfødningstarif, netselskabets indfødningstarif og leverandørgebyr. Kan være negativ.</p>
+          <p style="margin:8px 0;"><strong style="color:var(--text)">Selvforbrugsværdi (øre)</strong> — hvad 1 kWh ville være værd hvis du brugte den selv i stedet — altså den sparede detailpris: <code>spot × 1,25 + forbrugstariffer × 1,25</code> (nettarif, elafgift, leverandørtillæg og Energinet-tariffer, inkl. moms).</p>
+          <p style="margin:8px 0;"><strong style="color:var(--text)">Tabt (kr)</strong> — tabt fortjeneste for timen: <code>(selvforbrugsværdi − netto eksport) × kWh ÷ 100</code>. Altså hvad du gik glip af ved at sælge frem for at bruge eller lagre strømmen. Vises kun når den er positiv.</p>
+          <p style="margin:8px 0;"><strong style="color:var(--text)">Status</strong> — markering ud fra netto eksportpris: <span class="badge red">Negativ pris</span> (under 0), <span class="badge red">Dårlig</span> (under din Dårlig-grænse), <span class="badge amber">Lav pris</span> (mellem Dårlig- og Advarsel-grænsen).</p>
+          <p style="margin:10px 0 4px; font-size:0.82rem;">Er per-time tarif-data ikke aktivt (netselskab uden historik), bruges i stedet de manuelle felter i trin 2 — fradrag <code>t1–t4</code> og <code>tariff-overhead</code>.</p>
+        </div>
+      </details>
+
       <div class="table-wrap">
         <table id="badHoursTable">
           <thead>

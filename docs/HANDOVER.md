@@ -64,6 +64,13 @@ Dette dokument beskriver hele projektets nuværende tilstand, så arbejdet kan f
 
 ## 2. Hvad mangler / kendte TODOs
 
+### Korrekthed (åbne)
+- **⚠️ Produktionsfradrag matcher ikke faktisk afregnings-opgørelse (2026-07-03).** De beregnede fradrag på eksportsiden (Energinets balance- + indfødningstarif, netselskabets indfødningstarif, leverandørgebyr) i "Netto eksport"/"Afregnings-validering" stemmer ikke med tallene på brugerens rigtige afregnings-opgørelse. Skal undersøges:
+  - Hvilke komponenter og satser står der faktisk på opgørelsen? Sammenlign post-for-post mod `lookupHourlyComponents()` og `analyze()`.
+  - Moms-håndtering på eksportsiden: `analyze()` ganger eksportfradrag med `1,25` (`exportFradragOere = (energinetBalance + energinetIndfodning + supplierIndfodning) * 1.25 * 100 + t4`) — er moms korrekt på produktion/salg, eller skal fradragene være uden moms?
+  - Er `t4` (leverandørgebyr) dobbeltregnet eller i forkert enhed?
+  - Verificér satserne i `data/tariffs/{GLN}.json` og `data/constants/energinet.json` mod opgørelsens periode.
+
 ### Data-fuldstændighed
 - **Videbæk Elnet** kunne ikke auto-matches til EDS (kun 34 af 38 Strømligning suppliers er backfillet). Skal undersøges hvor de findes i EDS.
 - **8 netselskaber har ingen indfødningskode** (`null` i supplier-map): N1 (har faktisk `C INDF` nu — fix kom efter), Aal El-Net, Cerius, Dinel, El-net Kongerslev, Elektrus, Elinor, Elnet Midt, m.fl. — disse netselskaber har enten reelt ingen separat C-indfødning, eller auto-discovery missede det. Verificér mod Strømlignings UI eller netselskabernes egne sider. **Note:** N1 fik faktisk `C INDF` ved seneste run; lokalt vises 26/34 med kode efter merge fra eksisterende filer.
