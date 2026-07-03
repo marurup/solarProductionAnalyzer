@@ -96,6 +96,27 @@
     .field input:focus { outline: none; border-color: var(--accent); }
     .field-unit { font-size: 0.75rem; color: var(--muted); }
 
+    /* Genbrugelig hjælpe-ikon med tooltip (hover + tastatur-fokus) */
+    .help-icon {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 15px; height: 15px; margin-left: 5px; vertical-align: middle;
+      border-radius: 50%; border: 1px solid var(--muted);
+      color: var(--muted); font-size: 0.68rem; font-weight: 700;
+      cursor: help; position: relative;
+    }
+    .help-icon:hover, .help-icon:focus { color: var(--text); border-color: var(--text); outline: none; }
+    .help-icon::after {
+      content: attr(data-tip);
+      position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+      width: 250px; max-width: 60vw;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+      padding: 8px 10px; font-size: 0.78rem; font-weight: 400; color: var(--text);
+      line-height: 1.45; text-align: left; white-space: normal; pointer-events: none;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.45);
+      opacity: 0; visibility: hidden; transition: opacity 0.15s; z-index: 50;
+    }
+    .help-icon:hover::after, .help-icon:focus::after { opacity: 1; visibility: visible; }
+
     /* Selects */
     select {
       background: var(--bg);
@@ -146,6 +167,8 @@
       flex-shrink: 0;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+    .status-bar.error { color: var(--red); }
+    .status-bar.error .spinner { display: none; }
 
     /* Results */
     .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
@@ -220,6 +243,13 @@
   </style>
 </head>
 <body>
+
+<div id="fileProtocolWarning" style="display:none; background:rgba(239,68,68,0.12); border:1px solid var(--red); border-radius:8px; padding:12px 16px; margin-bottom:16px; font-size:0.9rem; line-height:1.5;">
+  ⚠ <strong>Siden er åbnet som en lokal fil (<code>file://</code>).</strong>
+  Browseren blokerer indlæsning af pris- og tarifdata på den måde, så analysen fejler med "spotpriser mangler".
+  Start i stedet en webserver i projektmappen og åbn <code>http://localhost:8080/</code>:
+  <div style="margin-top:6px;"><code style="user-select:all; background:var(--bg); padding:2px 6px; border-radius:4px;">python -m http.server 8080</code></div>
+</div>
 
 <div style="display:flex; align-items:baseline; justify-content:space-between; gap:16px; flex-wrap:wrap;">
   <h1>☀️ Solcelle Eksport-Analyse</h1>
@@ -339,14 +369,14 @@
 
   <div class="row" style="margin-bottom:16px; gap:20px;">
     <div class="field">
-      <label>Prisområde</label>
+      <label>Prisområde<span class="help-icon" tabindex="0" role="img" aria-label="Hjælp" data-tip="Bestemmer hvilke spotpriser der hentes. Vestdanmark (Jylland og Fyn) = DK1; Østdanmark (Sjælland, Lolland-Falster og Bornholm) = DK2.">?</span></label>
       <select id="priceArea">
         <option value="DK2">DK2 (Sjælland, Fyn, Bornholm)</option>
         <option value="DK1">DK1 (Jylland, Fyn)</option>
       </select>
     </div>
     <div class="field">
-      <label>Tariff-overhead (alt over spot × 1,25)</label>
+      <label>Tariff-overhead (alt over spot × 1,25)<span class="help-icon" tabindex="0" role="img" aria-label="Hjælp" data-tip="Alt oven i spotprisen når du selvforbruger: nettarif + elafgift + leverandørtillæg + Energinet-tariffer, i øre/kWh inkl. moms. Bruges kun som fallback — når per-time tarif-data er aktivt, beregnes det automatisk pr. time i stedet.">?</span></label>
       <input type="number" id="selfConsumpOverhead" value="55" min="0" max="400" step="1">
       <span class="field-unit">øre/kWh m. moms — nettarif + elafgift + leverandørtillæg + Energinet-tariffer</span>
     </div>
@@ -362,22 +392,22 @@
   <h3>Fradrag på eksportpris</h3>
   <div class="tariff-grid" style="margin-bottom:12px;">
     <div class="field">
-      <label>Energinets balancetarif</label>
+      <label>Energinets balancetarif<span class="help-icon" tabindex="0" role="img" aria-label="Hjælp" data-tip="Fast fradrag Energinet opkræver pr. kWh produktion du leverer til nettet. Trækkes fra spotprisen. Bruges som fallback når per-time tarif-data mangler.">?</span></label>
       <input type="number" id="t1" value="0.65" min="0" max="10" step="0.01">
       <span class="field-unit">øre/kWh</span>
     </div>
     <div class="field">
-      <label>Energinets indfødningstarif</label>
+      <label>Energinets indfødningstarif<span class="help-icon" tabindex="0" role="img" aria-label="Hjælp" data-tip="Energinets indfødningstarif — fradrag pr. kWh du føder ind på transmissionsnettet. Trækkes fra spotprisen. Bruges som fallback når per-time tarif-data mangler.">?</span></label>
       <input type="number" id="t2" value="0.50" min="0" max="10" step="0.01">
       <span class="field-unit">øre/kWh</span>
     </div>
     <div class="field">
-      <label>Netselskabets indfødningstarif</label>
+      <label>Netselskabets indfødningstarif<span class="help-icon" tabindex="0" role="img" aria-label="Hjælp" data-tip="Dit netselskabs indfødningstarif pr. kWh leveret til nettet. Varierer mellem netselskaber — tjek dit tillægsblad. Sættes automatisk til 0 hvis du markerer aftagepligt nedenfor.">?</span></label>
       <input type="number" id="t3" value="0.47" min="0" max="20" step="0.01">
       <span class="field-unit">øre/kWh (Radius: 0,47 — andet netselskab: tjek dit tillægsblad)</span>
     </div>
     <div class="field">
-      <label>Leverandørens balancetarif / gebyr</label>
+      <label>Leverandørens balancetarif / gebyr<span class="help-icon" tabindex="0" role="img" aria-label="Hjælp" data-tip="Gebyr dit elselskab tager for at afregne din produktion, pr. kWh. Anvendes altid — også når per-time tarif-data er aktivt — da Strømligning ikke leverer dette tal.">?</span></label>
       <input type="number" id="t4" value="3.00" min="0" max="20" step="0.01">
       <span class="field-unit">øre/kWh (Andel Energi: 3,00)</span>
     </div>
@@ -395,14 +425,19 @@
   <h3 style="margin-top: 20px;">Grænseværdier</h3>
   <div class="tariff-grid">
     <div class="field">
-      <label>"Dårlig" eksporttime — under denne nettopris</label>
+      <label>"Dårlig" eksporttime — under denne nettopris<span class="help-icon" tabindex="0" role="img" aria-label="Hjælp" data-tip="En eksporttime markeres 'Dårlig' (rød) når nettoprisen — spot minus alle fradrag — er lavere end denne værdi. Kan sættes negativ for kun at fange timer med negativ pris.">?</span></label>
       <input type="number" id="badThreshold" value="10" min="-100" max="100" step="1">
       <span class="field-unit">øre/kWh netto (inkl. negative priser)</span>
     </div>
     <div class="field">
-      <label>"Advarsel" — gul markering under</label>
+      <label>"Advarsel" — gul markering under<span class="help-icon" tabindex="0" role="img" aria-label="Hjælp" data-tip="En eksporttime får en gul 'Advarsel'-markering når nettoprisen ligger mellem 'Dårlig'-grænsen og denne værdi.">?</span></label>
       <input type="number" id="warnThreshold" value="25" min="0" max="200" step="1">
       <span class="field-unit">øre/kWh netto</span>
+    </div>
+    <div class="field">
+      <label>Minimum eksport — ignorér timer under<span class="help-icon" tabindex="0" role="img" aria-label="Hjælp om minimum eksport" data-tip="Timer hvor der er eksporteret mindre end denne mængde ignoreres i tabellen. De skyldes typisk måle-støj/afrunding mellem inverterens smart-meter og den faktiske el-måler (fx 0,001 kWh) og er reelt 0 kr værd. Sæt til 0 for at vise alle timer.">?</span></label>
+      <input type="number" id="minExportKwh" value="0.01" min="0" max="10" step="0.01">
+      <span class="field-unit">kWh (filtrerer måle-støj fra, fx 0,001 kWh)</span>
     </div>
   </div>
 
@@ -437,7 +472,7 @@
     <div class="tab-content active" id="tab-bad">
       <div class="row" style="margin-bottom: 12px;">
         <span style="font-size:0.85rem; color:var(--muted)">
-          Timer med netto eksportpris under grænseværdien — sorteret efter størst tabt fortjeneste.
+          Timer med netto eksportpris under grænseværdien og eksport over minimum — sorteret efter størst tabt fortjeneste.
         </span>
         <div class="spacer"></div>
         <button class="btn btn-secondary" id="btnExportCSV" style="font-size:0.82rem; padding:6px 14px;">Eksporter CSV</button>
@@ -988,6 +1023,7 @@ function getTariffs() {
     selfConsumpOverhead: +document.getElementById('selfConsumpOverhead').value,
     badThreshold: +document.getElementById('badThreshold').value,
     warnThreshold: +document.getElementById('warnThreshold').value,
+    minExportKwh: (() => { const v = parseFloat(document.getElementById('minExportKwh').value); return isNaN(v) ? 0.01 : v; })(),
   };
 }
 
@@ -1085,6 +1121,10 @@ function analyze(exportRows, spotPrices, tariffs, tariffData) {
 
     const tabtFortjenesteDKK = Math.max(0, (selvforbrugVaerdi - nettoEksportOere) * row.kwh / 100);
 
+    // Timer med forsvindende lidt eksport (typisk måle-støj mellem inverter og
+    // el-måler, fx 0,001 kWh) flagges ikke som problematiske.
+    const meetsMinExport = row.kwh >= tariffs.minExportKwh;
+
     results.push({
       timestamp: row.timestamp,
       hourKey: row.hourKey,
@@ -1093,8 +1133,8 @@ function analyze(exportRows, spotPrices, tariffs, tariffData) {
       nettoEksportOere,
       selvforbrugVaerdi,
       tabtFortjenesteDKK,
-      isDaarlig: nettoEksportOere < tariffs.badThreshold,
-      isWarn: nettoEksportOere >= tariffs.badThreshold && nettoEksportOere < tariffs.warnThreshold,
+      isDaarlig: meetsMinExport && nettoEksportOere < tariffs.badThreshold,
+      isWarn: meetsMinExport && nettoEksportOere >= tariffs.badThreshold && nettoEksportOere < tariffs.warnThreshold,
       exportBreakdown: breakdown ? {
         energinetBalanceOere: breakdown.energinetBalance * 1.25 * 100,
         energinetIndfodningOere: breakdown.energinetIndfodning * 1.25 * 100,
@@ -2476,6 +2516,7 @@ document.getElementById('btnAnalyze').addEventListener('click', async () => {
 
   btnAnalyze.disabled = true;
   statusBar.style.display = 'flex';
+  statusBar.classList.remove('error');
 
   try {
     const rows = state.exportRows;
@@ -2514,12 +2555,13 @@ document.getElementById('btnAnalyze').addEventListener('click', async () => {
 
     statusText.textContent = `Analyse færdig — ${data.length} timer analyseret`;
     renderResults(data, tariffs);
+    setTimeout(() => { statusBar.style.display = 'none'; }, 4000); // skjul kun ved succes
   } catch (e) {
     log.error(`Analyse fejlede: ${e.message}`);
     statusText.textContent = `Fejl: ${e.message}`;
+    statusBar.classList.add('error');   // bliv stående så fejlen kan læses
   } finally {
     btnAnalyze.disabled = false;
-    setTimeout(() => { statusBar.style.display = 'none'; }, 4000);
   }
 });
 
@@ -2531,6 +2573,14 @@ document.getElementById('btnClearCache').addEventListener('click', async () => {
   log.info('Lokal cache ryddet');
   updateCacheStatus('Cache ryddet — næste analyse henter al data fra API');
 });
+
+// Advar hvis siden er åbnet via file:// — så fejler alle relative fetch (data/…)
+// med "Failed to fetch", og analysen melder fejlagtigt at spotpriser mangler.
+if (location.protocol === 'file:') {
+  const w = document.getElementById('fileProtocolWarning');
+  if (w) w.style.display = 'block';
+  log.warn('Åbnet via file:// — pris- og tarifdata kan ikke hentes. Kør en lokal server og åbn http://localhost:8080/');
+}
 
 // Show cache count on load
 (async () => {
