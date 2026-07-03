@@ -1,6 +1,6 @@
 # Handover-dokument — Solcelle Eksport-Analyse
 
-**Sidst opdateret:** 2026-06-02
+**Sidst opdateret:** 2026-07-03
 **Repo:** https://github.com/marurup/solarProductionAnalyzer
 **Live:** https://marurup.github.io/solarProductionAnalyzer/
 
@@ -9,7 +9,16 @@ Dette dokument beskriver hele projektets nuværende tilstand, så arbejdet kan f
 ## 1. Hvad er færdigt og live
 
 ### Frontend (browser)
-- **CSV-upload** med auto-detektion af målepunkt via `målepunktstype_kode` (D06=eksport, D07=forbrug, E17/E18)
+- **CSV-upload** med auto-detektion af målepunkt via typekode (D06=eksport, D07=forbrug, E17/E18)
+  - **Dansk + engelsk** eloverblik-format genkendes (`Fra`/`From_date`, `Mængde`/`Volume`, `Målepunktstype_kode`/`Metering_point_type_Code` m.fl.)
+  - **Måleserie = målepunkts-ID + typekode** — samme fil kan indeholde flere flows; hver vises med tidsinterval i upload-boksen (så man ser fx at produktionen først er tilføjet senere)
+  - **Blandet opløsning per serie** håndteres: `processRows()` aggregerer altid til timer ved at summere kWh per `hourKey` (korrekt for både time- og 15-min-data). Der bruges INGEN global opløsnings-detektion længere
+  - Auto-valg af D06 + auto-indlæsning af D07 fra samme fil; separat forbrugsfil-boks viser dæmpet note når forbrug kom fra hovedfilen
+  - **Tydelige fejl** vises direkte i upload-boksen (ikke kun i log) hvis CSV-formatet ikke genkendes
+- **`file://`-advarsel:** åbnes siden som lokal fil (ikke via webserver) vises en rød banner — ellers fejler alle `fetch()` med "Failed to fetch" og analysen melder fejlagtigt manglende spotpriser
+- **Grænseværdier:** "Dårlig"/"Advarsel"-nettopris + **minimum eksport** (default 0,01 kWh) der filtrerer måle-støj (fx 0,001 kWh) fra de problematiske timer
+- **Hjælpe-ikoner (`?`)** med tooltip på alle konfigurations-felter (hover + tastatur-fokus)
+- **Log** samlet i én foldbar sektion nederst (uafhængig af trin 1/2); foldet sammen som standard, auto-åbner kun ved fejl, badge viser antal advarsler/fejl, hver entry har tidsstempel
 - **Quick-konfiguration via adresse:**
   - DAWA autocomplete med 250 ms debounce → fuld adresse + koordinater
   - Strømligning `/api/suppliers/find?lat=&long=` → netselskab auto-valgt
@@ -71,7 +80,9 @@ Dette dokument beskriver hele projektets nuværende tilstand, så arbejdet kan f
 - **Manuel t1-t4 fallback** når supplier ikke har tariff-data — ingen UI-indikator om man er i fallback eller per-time mode på selve analyse-skærmen (kun i log)
 
 ### Test
-- **Ingen automatiserede tests.** Hele verifikationen er manuel via:
+- **CSV-parser: `test/parse-check.mjs`** kører den ægte parser mod filer i `test-data/` (git-ignoreret). Parser-koden udtrækkes 1:1 fra `index.html` mellem `==PARSE_CORE_START==`/`==PARSE_CORE_END==`-markørerne (ingen kopi der kan drive fra hinanden). Kør med `npm run test:parse`. Viser måleserier, tidsintervaller, aggregerede timetal og om analyser-knappen ville aktiveres.
+  - **Vigtigt:** hvis du flytter/omdøber parser-funktionerne, så hold dem inden for markørerne og lad blokken kun referere `Papa`, `log` og `meterTypeDescription` udefra.
+- **Resten er manuel verifikation:**
   - "Per-time aktiv"-badge dukker op efter "Anvend konfiguration"
   - Sanity-check af tal vs. Strømlignings egen UI for samme adresse
 - Et sanity-check-script kunne sammenligne vores per-hour beregning mod Strømlignings prices API for tilfældige timer.
@@ -100,9 +111,10 @@ Søg på `// TODO` i `index.html` og `scripts/`.
 ## 4. Kendte edge cases
 
 ### CSV-parser
-- **Multiple målepunkter i samme fil:** vi viser dropdown med D06/D07-koderne. Auto-vælger D06 (eksport).
-- **Kvarter-opløsning vs. time:** auto-detekteres fra første to rækker. Aggregerer 15-min til time hvis nødvendigt.
-- **15-min data fra DK1/DK2 hvor flere meter-punkter er i samme fil:** opløsnings-detektion ser kun på timestamps fra SAMME meter — ellers ville auto-detekte forkert.
+- **Sprog:** danske OG engelske kolonnenavne genkendes via `findColumn()` (substring-match efter fjernelse af ikke-bogstaver).
+- **Multiple måleserier i samme fil:** serie-identitet = målepunkts-ID + typekode. Ved flere serier auto-vælges D06 (eksport) + D07 (forbrug); ellers vises dropdown.
+- **Kvarter vs. time (blandet per serie):** der bruges INGEN global opløsnings-detektion. `processRows()` aggregerer altid hver valgt serie til timer ved at summere kWh per `hourKey`. For time-data er det identitet; for 15-min summeres 4 rækker → 1 time. Det håndterer korrekt en fil hvor fx E17 er time-data og D06/D07 er 15-min.
+- **Måle-støj:** timer under "minimum eksport" (default 0,01 kWh) flagges ikke som problematiske (se `tariffs.minExportKwh` i `analyze()`).
 
 ### Tariff-lookup
 - **ValidFrom/ValidTo grænser:** Vores `lookupByDate` bruger `validFrom <= date < validTo` (eksklusiv øvre grænse). Records er sorteret nyeste først for hurtig lookup.
@@ -125,13 +137,16 @@ Søg på `// TODO` i `index.html` og `scripts/`.
 git clone git@github.com:marurup/solarProductionAnalyzer.git
 cd solarProductionAnalyzer
 
-# Start lokal server
+# Start lokal server (KRÆVES — file:// virker ikke, se nedenfor)
 python3 -m http.server 8080
 # Åbn http://localhost:8080/
 
-# Hvis du vil køre scripts lokalt
-node --version  # skal være 18+
+# Hvis du vil køre scripts eller CSV-parser-testen lokalt
+node --version   # skal være 18+
+npm install      # kun papaparse (devDep), til test/parse-check.mjs
 ```
+
+> **`file://` virker ikke:** browseren blokerer `fetch()` af lokale filer, så pris-/tarif-data fejler. Servér altid over HTTP (`python3 -m http.server`). Appen viser en advarselsbanner hvis den åbnes via `file://`.
 
 ### Hyppige opgaver
 
@@ -141,9 +156,9 @@ node --version  # skal være 18+
 3. Tjek browser-konsol for fejl
 
 **Debug en CSV-parse-fejl:**
-1. Upload CSV → klik debug-tab i resultater
-2. Læs `parseLog`-output
-3. Hvis nødvendigt: kør analysen og kig på `debugLog` i samme tab
+1. Upload CSV → fold **log-sektionen nederst på siden** ud (åbner automatisk ved fejl)
+2. Læs log-linjerne (hver med tidsstempel + `[INFO]`/`[WARN]`/`[ERR]`)
+3. Eller kør `npm run test:parse` mod filen (lagt i `test-data/`) for samme parse uden browser
 
 **Test ny netselskab-tilføjelse til supplier-map:**
 1. Edit `scripts/fetch-tariffs.mjs` `MANUAL_GLN_OVERRIDES` (hvis navne ikke matcher)
@@ -159,9 +174,10 @@ node --version  # skal være 18+
 
 ### Filer du ofte vil ændre
 
-- **`index.html`** — hele appen. Vigtige sektioner markeret med `// ─── XXX ─────` kommentar-blokke.
+- **`index.html`** — hele appen. Vigtige sektioner markeret med `// ─── XXX ─────` kommentar-blokke. CSV-parseren ligger mellem `==PARSE_CORE_START==`/`==PARSE_CORE_END==` (udtrækkes af testen — hold den selvstændig).
 - **`status.html`** — debug + cache-view
 - **`scripts/fetch-*.mjs`** — backfill-logik
+- **`test/parse-check.mjs`** — offline-test af CSV-parseren mod `test-data/`
 - **`data/constants/*.json`** — manuelt vedligeholdte konstanter (overskrives af workflow ved næste run)
 
 ### Trigger-deeplinks

@@ -8,8 +8,8 @@ Alt processeres lokalt i browseren — ingen data forlader brugerens maskine.
 
 ## Sådan virker det
 
-1. Brugeren uploader CSV-eksport fra eloverblik.dk (én fil med både forbrug og produktion)
-2. Appen detekterer automatisk eksport (D06) og forbrug (D07) via `målepunktstype_kode`
+1. Brugeren uploader CSV-eksport fra eloverblik.dk (én fil med både forbrug og produktion). CSV'en kan være på **dansk eller engelsk** — kolonnenavne genkendes for begge (`Fra`/`From_date`, `Mængde`/`Volume`, `Målepunktstype_kode`/`Metering_point_type_Code` osv.)
+2. Appen detekterer automatisk eksport (D06) og forbrug (D07) via typekoden. Hver måleserie (kombination af målepunkts-ID + typekode) vises med tidsinterval, så man kan se fx at produktionen først er tilføjet senere end forbruget. Blandet opløsning i samme fil håndteres (fx time-data på hovedmåleren og 15-min på D06/D07 — hver serie aggregeres til timer for sig)
 3. (Valgfrit) Brugeren indtaster adresse → DAWA autocomplete + Strømligning auto-detect af netselskab
 4. Spotpriser hentes fra statiske JSON-filer i repo'et (genereret af GitHub Action)
 5. Tarif-data slås op per CSV-time:
@@ -80,6 +80,11 @@ Spotpriser og tariff-data fra Energi Data Service (EDS) er **kun** tilgængelige
 │   ├── fetch-tariffs.mjs               # netselskabs nettariffer-backfill (DatahubPricelist)
 │   └── fetch-energinet.mjs             # Energinet + elafgift (DatahubPricelist)
 │
+├── test/
+│   └── parse-check.mjs                 # kører den ægte CSV-parser (udtrukket fra index.html) mod test-data/
+├── test-data/                          # (git-ignoreret) private eloverblik-CSV'er til lokal test
+├── package.json                        # kun devDep: papaparse (til parse-check.mjs)
+│
 ├── .github/workflows/
 │   ├── update-prices.yml               # daglig spotpris-backfill (14:00 UTC)
 │   └── update-tariffs.yml              # månedlig tariff-backfill (1. i mdr.)
@@ -91,15 +96,29 @@ Spotpriser og tariff-data fra Energi Data Service (EDS) er **kun** tilgængelige
 
 ## Lokal udvikling
 
-Ingen build-step. Server bare statiske filer:
+Ingen build-step. Server de statiske filer over HTTP:
 
 ```sh
 cd SolarProductionAnalyzer
 python3 -m http.server 8080
-# Åbn http://localhost:8080/
+# Åbn http://localhost:8080/  (IKKE file:// — se nedenfor)
 ```
 
-Scripts kører Node 18+:
+> ⚠️ **Åbn ikke `index.html` direkte som en fil (`file://`).** Browseren blokerer `fetch()` af lokale filer under `file://`, så alle pris-/tarif-data fejler med "Failed to fetch", og analysen melder fejlagtigt at spotpriser mangler. Appen viser en advarselsbanner hvis den åbnes sådan. Brug altid en webserver.
+
+### Test af CSV-parseren
+
+`test/parse-check.mjs` kører den ægte parser — udtrukket direkte fra `index.html` mellem `==PARSE_CORE_START==`/`==PARSE_CORE_END==`-markørerne, så testen aldrig kan drive fra produktionskoden. Læg en eloverblik-CSV i `test-data/` (git-ignoreret) og kør:
+
+```sh
+npm install            # henter papaparse (eneste devDep)
+npm run test:parse                      # første *.csv i test-data/
+node test/parse-check.mjs sti/til.csv   # specifik fil
+```
+
+Den viser måleserier, tidsintervaller, aggregerede timetal og om "Hent spotpriser"-knappen ville aktiveres.
+
+Backfill-scripts kører Node 18+:
 
 ```sh
 # Hent spotpriser
@@ -137,7 +156,7 @@ Spot-datasettene har dansk lokal tid i DK-kolonnerne. `DayAheadPrices` har 15-mi
 
 ## Branchekoder (eloverblik CSV)
 
-`målepunktstype_kode` i CSV:
+`målepunktstype_kode` / `Metering_point_type_Code` i CSV:
 
 | Kode | Betydning | Brug i appen |
 |---|---|---|
@@ -145,6 +164,13 @@ Spot-datasettene har dansk lokal tid i DK-kolonnerne. `DayAheadPrices` har 15-mi
 | **D07** | Forbrugt fra net | auto-indlæst som forbrug |
 | E17 | Forbrugsmålepunkt | hovedmåler (netto) |
 | E18 | Produktionsmålepunkt | målepunktstype |
+
+### CSV-parser — gotchas
+
+- **Dansk + engelsk:** eloverblik eksporterer på begge sprog. `findColumn()` matcher begge navnesæt (fx `Fra`/`From_date`, `Mængde`/`Volume`, `Målepunktsid`/`Metering_point_ID`).
+- **Måleserie = målepunkts-ID + typekode:** et enkelt målepunkt kan bære flere flows (D06/D07/E17) — de skelnes på typekoden, ikke kun ID.
+- **Blandet opløsning per serie:** samme fil kan have time-data på ét flow og 15-min på et andet. Der bruges ikke én global opløsning; hver serie aggregeres til timer ved at summere kWh per `hourKey` (energi er additiv → korrekt for både time- og kvarterdata).
+- **Minimum eksport:** timer med forsvindende lidt eksport (måle-støj mellem inverter og el-måler, fx 0,001 kWh) flagges ikke som problematiske. Grænse i UI, default 0,01 kWh.
 
 ## Privacy
 
