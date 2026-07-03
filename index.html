@@ -75,6 +75,9 @@
     .drop-label { font-size: 0.9rem; font-weight: 500; margin-bottom: 4px; }
     .drop-hint { font-size: 0.78rem; color: var(--muted); }
     .drop-status { font-size: 0.82rem; color: var(--green); margin-top: 8px; font-weight: 500; }
+    .drop-status.summary { text-align: left; display: inline-block; line-height: 1.65; }
+    .drop-status.error { color: var(--red); }
+    .drop-zone.error { border-color: var(--red); border-style: solid; }
 
     /* Tariff config */
     .tariff-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -702,6 +705,8 @@ function updateCacheStatus(msg) {
 }
 
 // ─── CSV Parsing ──────────────────────────────────────────────────────────────
+// ==PARSE_CORE_START== (test/parse-check.mjs udtrækker alt mellem disse markører —
+// blokken må kun referere Papa, log og meterTypeDescription udefra)
 
 function parseEloverblikCSV(text, label) {
   log.info(`Parsing ${label}...`);
@@ -724,25 +729,40 @@ function parseEloverblikCSV(text, label) {
 
   log.info(`${label}: ${result.data.length} rækker. Kolonner: ${Object.keys(result.data[0] || {}).join(', ')}`);
 
-  // Find timestamp and value columns
+  // Find timestamp and value columns.
+  // eloverblik kan eksportere på både dansk og engelsk — begge navnesæt skal genkendes:
+  //   dansk:   Fra / Mængde / Målepunktsid / Målepunktstype_kode
+  //   engelsk: From_date / Volume / Metering_point_ID / Metering_point_type_Code
   const headers = Object.keys(result.data[0] || {});
   const tsCol = findColumn(headers, ['fra', 'from', 'dato', 'tidspunkt', 'time', 'datetime', 'start']);
-  const kwhCol = findColumn(headers, ['mængde', 'maengde', 'kwh', 'value', 'amount', 'quantity', 'forbrug', 'produktion', 'eksport']);
-  const meterIdCol       = findColumn(headers, ['målepunktsid', 'malepunktsid', 'maalepunktsid', 'meterid', 'meterpoint']);
+  const kwhCol = findColumn(headers, ['mængde', 'maengde', 'volume', 'kwh', 'value', 'amount', 'quantity', 'forbrug', 'produktion', 'eksport']);
+  const meterIdCol       = findColumn(headers, ['målepunktsid', 'malepunktsid', 'maalepunktsid', 'meteringpointid', 'meterid', 'meterpoint']);
   const typeCol          = findColumn(headers, ['type', 'målingstype', 'metertype']);
-  const meterTypeCodeCol = findColumn(headers, ['målepunktstype_kode', 'maalepunktstype_kode', 'typekode', 'metertype_kode']);
+  const meterTypeCodeCol = findColumn(headers, ['målepunktstype_kode', 'maalepunktstype_kode', 'meteringpointtypecode', 'typekode', 'typecode', 'metertype_kode']);
 
   if (!tsCol || !kwhCol) {
-    log.error(`Kunne ikke finde kolonner. Fundne kolonner: ${headers.join(', ')}`);
-    log.error('Forventet: en timestamps-kolonne ("Fra", "Dato") og en mængde-kolonne ("Mængde", "kWh")');
-    return null;
+    const missing = [];
+    if (!tsCol)  missing.push('en tidskolonne (fx "Fra", "From_date" eller "Dato")');
+    if (!kwhCol) missing.push('en mængdekolonne (fx "Mængde", "Volume" eller "kWh")');
+    log.error(`Kunne ikke genkende CSV-formatet. Fundne kolonner: ${headers.join(', ')}`);
+    log.error(`Mangler: ${missing.join(' og ')}`);
+    return { error: `Kunne ikke genkende CSV-formatet — mangler ${missing.join(' og ')}. `
+      + `Filen har kolonnerne: ${headers.join(', ')}. `
+      + `Er det en eloverblik-eksport (dansk eller engelsk)?` };
   }
 
   log.info(`${label}: bruger "${tsCol}" som tid, "${kwhCol}" som kWh${meterIdCol ? `, "${meterIdCol}" som målepunkt` : ''}${meterTypeCodeCol ? `, "${meterTypeCodeCol}" som typekode` : typeCol ? `, "${typeCol}" som type` : ''}`);
 
   const rows = [];
   let skipped = 0;
-  let resolution = null; // 'hour' or 'quarter'
+
+  // A single eloverblik metering point can carry several flows (D06 export,
+  // D07 import, E17 net) under the SAME metering_point_id, separated only by
+  // the type code — and each flow can have its own resolution (e.g. hourly E17
+  // + 15-min D06/D07 in one file). So the series identity must include the
+  // type code, and resolution is handled per series at aggregation time
+  // (processRows), never as one global value for the whole file.
+  const seriesIdOf = (meterId, meterTypeCode) => `${meterId || ''}|${meterTypeCode || ''}`;
 
   for (const row of result.data) {
     const tsRaw = (row[tsCol] || '').trim().replace(/^["']|["']$/g, '');
@@ -757,31 +777,20 @@ function parseEloverblikCSV(text, label) {
 
     if (!hourKey || !ts || isNaN(kwh)) { skipped++; continue; }
 
-    // Detect resolution from first two consecutive rows from the same meter
-    if (!resolution && rows.length >= 1) {
-      const prev = rows[rows.length - 1];
-      if (!meterIdCol || prev.meterId === meterId) {
-        const diff = (ts - prev.timestamp) / 60000; // minutes
-        resolution = diff <= 15 ? 'quarter' : 'hour';
-        log.info(`${label}: detekteret opløsning = ${resolution} (diff: ${diff} min)`);
-      }
-    }
-
-    rows.push({ timestamp: ts, kwh, hourKey, meterId, type, meterTypeCode });
+    rows.push({ timestamp: ts, kwh, hourKey, meterId, type, meterTypeCode, seriesId: seriesIdOf(meterId, meterTypeCode) });
   }
 
   if (skipped) log.warn(`${label}: ${skipped} rækker sprunget over (ugyldige data)`);
-  if (!resolution) { resolution = 'hour'; log.info(`${label}: opløsning ikke detekteret — antager timeopløsning`); }
 
-  // Build per-meter summary: type code, date range, row count
+  // Build per-series summary keyed by (metering_point_id + type code).
   const meterInfo = new Map();
-  if (meterIdCol) {
+  const hasGrouping = meterIdCol || meterTypeCodeCol;
+  if (hasGrouping) {
     for (const r of rows) {
-      if (!r.meterId) continue;
-      if (!meterInfo.has(r.meterId)) {
-        meterInfo.set(r.meterId, { type: r.type || '', meterTypeCode: r.meterTypeCode || '', firstKey: r.hourKey, lastKey: r.hourKey, count: 0 });
+      if (!meterInfo.has(r.seriesId)) {
+        meterInfo.set(r.seriesId, { meterId: r.meterId || '', type: r.type || '', meterTypeCode: r.meterTypeCode || '', firstKey: r.hourKey, lastKey: r.hourKey, count: 0 });
       }
-      const info = meterInfo.get(r.meterId);
+      const info = meterInfo.get(r.seriesId);
       info.count++;
       if (r.hourKey < info.firstKey) info.firstKey = r.hourKey;
       if (r.hourKey > info.lastKey) info.lastKey = r.hourKey;
@@ -789,20 +798,20 @@ function parseEloverblikCSV(text, label) {
   }
 
   const meterIds = [...meterInfo.keys()];
+  const seriesLabel = info => info.meterId ? `${info.meterId} — ${meterTypeDescription(info)}` : meterTypeDescription(info);
   if (meterIds.length > 1) {
-    log.warn(`${label}: ${meterIds.length} målepunkter fundet — vælg det korrekte nedenfor`);
+    log.warn(`${label}: ${meterIds.length} måleserier fundet — vælg den korrekte nedenfor`);
     meterIds.forEach(id => {
       const info = meterInfo.get(id);
-      log.warn(`  ${id}: ${meterTypeDescription(info)} — ${info.count} rækker (${info.firstKey?.slice(0,10)} → ${info.lastKey?.slice(0,10)})`);
+      log.warn(`  ${seriesLabel(info)} — ${info.count} rækker (${info.firstKey?.slice(0,10)} → ${info.lastKey?.slice(0,10)})`);
     });
   } else if (meterIds.length === 1) {
-    const info = meterInfo.get(meterIds[0]);
-    log.info(`${label}: målepunkt: ${meterIds[0]} — ${meterTypeDescription(info)}`);
+    log.info(`${label}: måleserie: ${seriesLabel(meterInfo.get(meterIds[0]))}`);
   }
 
   log.info(`${label}: ${rows.length} gyldige datapunkter. Periode: ${rows[0]?.hourKey?.slice(0,10)} → ${rows[rows.length-1]?.hourKey?.slice(0,10)}`);
 
-  return { rows, meterIds, meterInfo, resolution };
+  return { rows, meterIds, meterInfo };
 }
 
 function findColumn(headers, candidates) {
@@ -855,14 +864,20 @@ function aggregateToHourly(rows) {
     .sort((a, b) => a.timestamp - b.timestamp);
 }
 
-// Filter to one meter, then aggregate to hourly if needed
-function processRows(allRows, resolution, meterId) {
-  const rows = meterId ? allRows.filter(r => r.meterId === meterId) : allRows;
-  if (resolution === 'quarter') {
-    log.info(`Aggregerer ${rows.length} 15-min rækker til timer...`);
-    return aggregateToHourly(rows);
+// Extract one series (metering point + type code) and aggregate to hourly.
+// Energy (kWh) is additive across sub-hour intervals, so summing every raw row
+// that shares an hourKey yields the correct hourly value regardless of source
+// resolution: hourly data (one row/hour) passes through unchanged, 15-min data
+// (4 rows/hour) is summed. This removes any dependence on a single global
+// resolution, which is wrong when one file mixes resolutions across series
+// (e.g. hourly E17 alongside 15-min D06/D07).
+function processRows(allRows, seriesId) {
+  const rows = seriesId ? allRows.filter(r => r.seriesId === seriesId) : allRows;
+  const hourly = aggregateToHourly(rows);
+  if (rows.length !== hourly.length) {
+    log.info(`Aggregerede ${rows.length} rækker → ${hourly.length} timer`);
   }
-  return rows;
+  return hourly;
 }
 
 // Extract "YYYY-MM-DDTHH" directly from the raw eloverblik timestamp string —
@@ -886,6 +901,7 @@ function rawToHourKey(raw) {
 
   return null;
 }
+// ==PARSE_CORE_END==
 
 // ─── Spotpriser (statisk cache + IndexedDB) ──────────────────────────────────
 // Sitet henter KUN fra data/prices/{area}/{YYYY-MM}.json — disse filer
@@ -2199,9 +2215,81 @@ function setupDropZone(dropId, inputId, label, onLoad) {
 function updateDropStatus(dropId, rows) {
   const drop = document.getElementById(dropId);
   drop.classList.add('loaded');
+  drop.classList.remove('error');
   const statusEl = drop.querySelector('.drop-status');
+  statusEl.classList.remove('error', 'summary');
+  statusEl.style.color = '';
   statusEl.style.display = 'block';
   statusEl.textContent = `✓ ${rows.length} timer indlæst (${rows[0].timestamp.toLocaleDateString('da-DK')} – ${rows[rows.length-1].timestamp.toLocaleDateString('da-DK')})`;
+}
+
+// Show a clear, visible parse/load error directly in the drop zone (not just the log).
+function showDropError(dropId, message) {
+  log.error(`${dropId}: ${message}`);
+  const drop = document.getElementById(dropId);
+  drop.classList.remove('loaded');
+  drop.classList.add('error');
+  const statusEl = drop.querySelector('.drop-status');
+  statusEl.classList.remove('summary');
+  statusEl.classList.add('error');
+  statusEl.style.color = '';
+  statusEl.style.display = 'block';
+  statusEl.textContent = `⚠ ${message}`;
+}
+
+// Human-friendly role per målepunktstype_kode, and a sort priority so the
+// summary always lists export first, then import, then the net main meter.
+function describeRole(code) {
+  return ({
+    D06: 'Produktion/Eksport', E18: 'Produktion',
+    D07: 'Forbrug/Import',      D14: 'Nettoforbrug',
+    E17: 'Hovedmåler (netto)',
+  })[code] || null;
+}
+const SERIES_ROLE_ORDER = { D06: 0, E18: 1, D07: 2, D14: 3, E17: 4 };
+
+// Rich summary in the main drop zone: one line per detected series (role, type
+// code, date range), so the user can see e.g. that production was only added
+// later. Marks which series drive the export/consumption analysis.
+function updateExportZone(meterIds, meterInfo, exportId, forbrugId) {
+  const drop = document.getElementById('dropExport');
+  drop.classList.add('loaded');
+  drop.classList.remove('error');
+  const statusEl = drop.querySelector('.drop-status');
+  statusEl.classList.remove('error');
+  statusEl.classList.add('summary');
+  statusEl.style.color = '';
+  statusEl.style.display = 'inline-block';
+  statusEl.textContent = '';
+
+  const fmt = k => k ? k.slice(0, 10) : '?';
+  const ids = [...meterIds].sort((a, b) =>
+    (SERIES_ROLE_ORDER[meterInfo.get(a).meterTypeCode] ?? 9) -
+    (SERIES_ROLE_ORDER[meterInfo.get(b).meterTypeCode] ?? 9));
+
+  for (const id of ids) {
+    const info = meterInfo.get(id);
+    const role = describeRole(info.meterTypeCode) || meterTypeDescription(info);
+    const code = info.meterTypeCode || info.type || '?';
+    const usedFor = id === exportId ? ' — bruges til eksport-analyse'
+                  : id === forbrugId ? ' — bruges til forbrug-analyse' : '';
+    const div = document.createElement('div');
+    div.textContent = `${usedFor ? '✓' : '•'} ${role} (${code}): ${fmt(info.firstKey)} → ${fmt(info.lastKey)}${usedFor}`;
+    if (!usedFor) div.style.color = 'var(--muted)';
+    statusEl.appendChild(div);
+  }
+}
+
+// Muted note in the separate-forbrug zone when consumption was read from the
+// SAME file — so it doesn't look like the user uploaded a second file.
+function noteForbrugFromMainFile(rows) {
+  const drop = document.getElementById('dropForbrug');
+  drop.classList.remove('loaded', 'error');
+  const statusEl = drop.querySelector('.drop-status');
+  statusEl.classList.remove('error', 'summary');
+  statusEl.style.color = 'var(--muted)';
+  statusEl.style.display = 'block';
+  statusEl.textContent = `ℹ Forbrug/import blev aflæst fra hovedfilen (${rows.length} timer) — ingen separat fil nødvendig`;
 }
 
 // Danish DataHub metering point type codes (målepunktstype_kode)
@@ -2224,14 +2312,15 @@ function meterTypeDescription(info) {
   return info.type || '?';
 }
 
-function showMeterSelector(allRows, meterIds, meterInfo, resolution, onSelect, onAutoForbrug) {
+function showMeterSelector(allRows, meterIds, meterInfo, onSelect, onAutoForbrug) {
   const sel = document.getElementById('meterSelector');
   document.getElementById('meterCount').textContent = meterIds.length;
 
   const selectEl = document.getElementById('meterIdSelect');
   selectEl.innerHTML = meterIds.map(id => {
     const info = meterInfo.get(id);
-    return `<option value="${id}">${id} — ${meterTypeDescription(info)}</option>`;
+    const label = info.meterId ? `${info.meterId} — ${meterTypeDescription(info)}` : meterTypeDescription(info);
+    return `<option value="${id}">${label}</option>`;
   }).join('');
 
   // Auto-select export meter: D06 (Leveret til net) > E18 (Produktionsmålepunkt) > keyword
@@ -2261,9 +2350,9 @@ function showMeterSelector(allRows, meterIds, meterInfo, resolution, onSelect, o
     btn.removeEventListener('click', handler);
     sel.style.display = 'none';
     const selectedId = selectEl.value;
-    const selectedType = meterInfo.get(selectedId)?.type || '';
-    log.info(`Valgt målepunkt: ${selectedId} (${selectedType})`);
-    onSelect(processRows(allRows, resolution, selectedId));
+    const selectedInfo = meterInfo.get(selectedId);
+    log.info(`Valgt måleserie: ${selectedInfo?.meterId || ''} ${selectedInfo?.meterTypeCode || selectedInfo?.type || ''}`.trim());
+    onSelect(processRows(allRows, selectedId), selectedId);
 
     // If the file also has a forbrug meter (E17), auto-load it
     if (onAutoForbrug) {
@@ -2285,21 +2374,27 @@ function handleFile(file, dropId, label, onLoad) {
   const reader = new FileReader();
   reader.onload = e => {
     const parsed = parseEloverblikCSV(e.target.result, label);
-    if (!parsed) return;
-    const { rows, meterIds, meterInfo, resolution } = parsed;
-    if (!rows.length) return;
+    if (!parsed || parsed.error) {
+      showDropError(dropId, parsed?.error || 'Kunne ikke læse filen.');
+      return;
+    }
+    const { rows, meterIds, meterInfo } = parsed;
+    if (!rows.length) {
+      showDropError(dropId, 'Ingen gyldige datarækker fundet i filen. '
+        + 'Tjek at tid og mængde står i genkendelige kolonner, og at filen ikke er tom.');
+      return;
+    }
 
-    log.info(`${label}: ${meterIds.length} målepunkt(er), zone=${dropId}`);
+    log.info(`${label}: ${meterIds.length} måleserie(r), zone=${dropId}`);
     if (meterIds.length > 1) {
       // For the export drop zone: if exactly one D06 meter exists, auto-confirm it
       // without requiring the user to click through the selector.
       if (dropId === 'dropExport') {
         const d06Id = meterIds.find(id => meterInfo.get(id)?.meterTypeCode === 'D06');
         if (d06Id) {
-          const finalRows = processRows(rows, resolution, d06Id);
-          log.info(`Auto-valgt eksport: ${d06Id} (D06 — Leveret til net)`);
+          const finalRows = processRows(rows, d06Id);
+          log.info(`Auto-valgt eksport: ${meterInfo.get(d06Id)?.meterId || ''} (D06 — Leveret til net)`);
           onLoad(finalRows);
-          updateDropStatus(dropId, finalRows);
 
           // Auto-load D07/forbrug from same file
           const forbrugKeywords = ['forbrugt', 'forbrug', 'aftag'];
@@ -2307,14 +2402,17 @@ function handleFile(file, dropId, label, onLoad) {
             meterIds.find(id => id !== d06Id && meterInfo.get(id)?.meterTypeCode === 'D07') ||
             meterIds.find(id => id !== d06Id && meterInfo.get(id)?.meterTypeCode === 'E17') ||
             meterIds.find(id => id !== d06Id && forbrugKeywords.some(k => (meterInfo.get(id)?.type || '').toLowerCase().includes(k)));
+          let usedForbrugId;
           if (d07Id) {
-            const forbrugRows = processRows(rows, resolution, d07Id);
+            const forbrugRows = processRows(rows, d07Id);
             if (forbrugRows.length > 0) {
               state.forbrugRows = forbrugRows;
-              updateDropStatus('dropForbrug', forbrugRows);
-              log.info(`Auto-indlæst forbrug: ${d07Id} (${meterInfo.get(d07Id)?.meterTypeCode || meterInfo.get(d07Id)?.type})`);
+              usedForbrugId = d07Id;
+              noteForbrugFromMainFile(forbrugRows);
+              log.info(`Auto-indlæst forbrug: ${meterInfo.get(d07Id)?.meterId || ''} (${meterInfo.get(d07Id)?.meterTypeCode || meterInfo.get(d07Id)?.type})`);
             }
           }
+          updateExportZone(meterIds, meterInfo, d06Id, usedForbrugId);
           checkReady();
           return;
         }
@@ -2324,26 +2422,28 @@ function handleFile(file, dropId, label, onLoad) {
       const drop = document.getElementById(dropId);
       drop.classList.add('loaded');
       const statusEl = drop.querySelector('.drop-status');
+      statusEl.classList.remove('error');
       statusEl.style.display = 'block';
       statusEl.style.color = 'var(--accent)';
-      statusEl.textContent = `⚠ ${meterIds.length} målepunkter — vælg ét nedenfor`;
+      statusEl.textContent = `⚠ ${meterIds.length} måleserier — vælg én nedenfor`;
 
       const onAutoForbrug = dropId === 'dropExport' ? (forbrugId) => {
-        const forbrugRows = processRows(rows, resolution, forbrugId);
+        const forbrugRows = processRows(rows, forbrugId);
         if (forbrugRows.length > 0) {
           state.forbrugRows = forbrugRows;
-          updateDropStatus('dropForbrug', forbrugRows);
+          noteForbrugFromMainFile(forbrugRows);
         }
       } : null;
 
-      showMeterSelector(rows, meterIds, meterInfo, resolution, (finalRows) => {
+      showMeterSelector(rows, meterIds, meterInfo, (finalRows, selectedId) => {
         statusEl.style.color = '';
         onLoad(finalRows);
-        updateDropStatus(dropId, finalRows);
+        if (dropId === 'dropExport') updateExportZone(meterIds, meterInfo, selectedId);
+        else updateDropStatus(dropId, finalRows);
         checkReady();
       }, onAutoForbrug);
     } else {
-      const finalRows = processRows(rows, resolution, meterIds[0] ?? null);
+      const finalRows = processRows(rows, meterIds[0] ?? null);
       onLoad(finalRows);
       updateDropStatus(dropId, finalRows);
       checkReady();

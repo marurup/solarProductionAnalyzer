@@ -1,0 +1,11 @@
+{
+  "name": "solar-production-analyzer",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:parse": "node test/parse-check.mjs"
+  },
+  "devDependencies": {
+    "papaparse": "5.4.1"
+  }
+}
