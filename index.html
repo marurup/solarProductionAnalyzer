@@ -188,6 +188,9 @@
     .table-wrap { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
     th { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; cursor: pointer; user-select: none; }
+    th.th-static { cursor: default; }
+    th.sorted { color: var(--text); }
+    th .sort-ind { color: var(--accent); font-size: 0.85em; }
     th:hover { color: var(--text); }
     td { padding: 7px 12px; border-bottom: 1px solid rgba(42,45,58,0.5); white-space: nowrap; }
     tr:last-child td { border-bottom: none; }
@@ -485,7 +488,7 @@
     <div class="tab-content active" id="tab-bad">
       <div class="row" style="margin-bottom: 12px;">
         <span style="font-size:0.85rem; color:var(--muted)">
-          Timer med netto eksportpris under grænseværdien og eksport over minimum — sorteret efter størst tabt fortjeneste.
+          Timer med netto eksportpris under grænseværdien og eksport over minimum.
         </span>
         <div class="spacer"></div>
         <button class="btn btn-secondary" id="btnExportCSV" style="font-size:0.82rem; padding:6px 14px;">Eksporter CSV</button>
@@ -494,13 +497,13 @@
         <table id="badHoursTable">
           <thead>
             <tr>
-              <th onclick="sortTable('timestamp')">Dato/tid ▲</th>
-              <th onclick="sortTable('kwh')">kWh eksporteret</th>
-              <th onclick="sortTable('spotOere')">Spotpris (øre)</th>
-              <th onclick="sortTable('nettoEksportOere')">Netto eksport (øre)</th>
-              <th onclick="sortTable('selvforbrugVaerdi')">Selvforbrugsværdi (øre)</th>
-              <th onclick="sortTable('tabtFortjenesteDKK')">Tabt (kr)</th>
-              <th>Status</th>
+              <th data-col="timestamp" onclick="sortTable('timestamp')">Dato/tid<span class="sort-ind"></span></th>
+              <th data-col="kwh" onclick="sortTable('kwh')">kWh eksporteret<span class="sort-ind"></span></th>
+              <th data-col="spotOere" onclick="sortTable('spotOere')">Spotpris (øre)<span class="sort-ind"></span></th>
+              <th data-col="nettoEksportOere" onclick="sortTable('nettoEksportOere')">Netto eksport (øre)<span class="sort-ind"></span></th>
+              <th data-col="selvforbrugVaerdi" onclick="sortTable('selvforbrugVaerdi')">Selvforbrugsværdi (øre)<span class="sort-ind"></span></th>
+              <th data-col="tabtFortjenesteDKK" onclick="sortTable('tabtFortjenesteDKK')">Tabt (kr)<span class="sort-ind"></span></th>
+              <th class="th-static">Status</th>
             </tr>
           </thead>
           <tbody id="badHoursBody"></tbody>
@@ -737,6 +740,7 @@ const state = {
   consumptionMonths: null, // Map<string, monthly aggregation> for bill validation
   sortCol: 'tabtFortjenesteDKK',
   sortDir: -1,
+  showAllBad: false,  // "Problematiske timer"-tabel: vis alle rækker vs. de første N
   cache: new SpotPriceCache(),
   tariffData: null,   // {supplier, energinet, elafgift, markup} eller null hvis ikke aktiveret
 };
@@ -1255,6 +1259,8 @@ function renderResults(data, tariffs) {
   document.getElementById('tab-bad').classList.add('active');
   document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
 
+  state.showAllBad = false; // ny analyse → start afgrænset i "Problematiske timer"
+
   const bad = data.filter(d => d.isDaarlig);
   const totalKwh = data.reduce((s, d) => s + d.kwh, 0);
   const totalIncome = data.reduce((s, d) => s + d.nettoEksportOere * d.kwh / 100, 0);
@@ -1280,12 +1286,36 @@ function renderResults(data, tariffs) {
   updateStepIndicator(3);
 }
 
+const BAD_ROWS_LIMIT = 500; // vis de N med størst tabt fortjeneste; resten bag "vis alle"
+
+function updateSortIndicators() {
+  // sortDir === -1 → faldende (største/nyeste først) → ▼; +1 → stigende → ▲
+  document.querySelectorAll('#badHoursTable th[data-col]').forEach(th => {
+    const ind = th.querySelector('.sort-ind');
+    if (!ind) return;
+    const active = th.dataset.col === state.sortCol;
+    ind.textContent = active ? (state.sortDir === -1 ? ' ▼' : ' ▲') : '';
+    th.classList.toggle('sorted', active);
+  });
+}
+
 function renderBadHoursTable(data, tariffs) {
   const filtered = data.filter(d => d.isDaarlig || d.isWarn);
-  const sorted = [...filtered].sort((a, b) => state.sortDir * (b[state.sortCol] - a[state.sortCol]));
+  // sortDir=-1 → faldende (a-b giver stigende, så -1*(a-b) = b-a → største først)
+  const sorted = [...filtered].sort((a, b) => state.sortDir * (a[state.sortCol] - b[state.sortCol]));
+  updateSortIndicators();
 
   const tbody = document.getElementById('badHoursBody');
-  tbody.innerHTML = sorted.slice(0, 200).map(d => {
+
+  if (sorted.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px">Ingen timer under grænseværdien 🎉</td></tr>';
+    return;
+  }
+
+  const truncated = !state.showAllBad && sorted.length > BAD_ROWS_LIMIT;
+  const shown = truncated ? sorted.slice(0, BAD_ROWS_LIMIT) : sorted;
+
+  let html = shown.map(d => {
     const cls = d.isDaarlig ? 'bad' : 'warn';
     const badge = d.isDaarlig
       ? `<span class="badge red">${d.nettoEksportOere < 0 ? 'Negativ pris' : 'Dårlig'}</span>`
@@ -1301,9 +1331,21 @@ function renderBadHoursTable(data, tariffs) {
     </tr>`;
   }).join('');
 
-  if (sorted.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px">Ingen timer under grænseværdien 🎉</td></tr>';
+  if (truncated) {
+    html += `<tr><td colspan="7" style="text-align:center;padding:14px;color:var(--muted)">
+      Viser de ${BAD_ROWS_LIMIT} med størst tabt fortjeneste af <strong style="color:var(--text)">${sorted.length}</strong> timer —
+      <a href="#" id="showAllBad" style="color:var(--accent);text-decoration:none">vis alle ${sorted.length}</a>
+      (eller brug "Eksporter CSV" for hele listen)
+    </td></tr>`;
   }
+  tbody.innerHTML = html;
+
+  const link = document.getElementById('showAllBad');
+  if (link) link.addEventListener('click', e => {
+    e.preventDefault();
+    state.showAllBad = true;
+    renderBadHoursTable(data, tariffs);
+  });
 }
 
 function renderMonthlyTable(data) {
