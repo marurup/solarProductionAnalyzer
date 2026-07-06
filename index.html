@@ -565,6 +565,16 @@
         Forskel kan skyldes at din aftale afregner til månedlig gennemsnitlig spotpris frem for time-for-time.
         Klik på en måned for at se fradragsdetaljer. Beløb du indtaster gemmes lokalt i browseren.
       </p>
+      <div style="display:flex; gap:20px; flex-wrap:wrap; margin-bottom:20px; padding:14px 16px; background:var(--bg); border:1px solid var(--border); border-radius:8px; align-items:flex-end;">
+        <div class="field">
+          <label>Produktions-abonnement</label>
+          <input type="number" id="revenueAbon" placeholder="0" min="0" step="0.01" style="width:110px">
+          <span class="field-unit">kr/md</span>
+        </div>
+        <span style="font-size:0.82rem; color:var(--muted); max-width:340px; line-height:1.5">
+          Fast månedligt beløb din produktionsleverandør trækker (fx abonnement). Trækkes fra hver måneds beregnede netto. Vindstød: 0.
+        </span>
+      </div>
       <div class="table-wrap">
         <table id="revenueTable">
           <thead>
@@ -1423,6 +1433,17 @@ function saveRevenueActual(monthKey, value) {
   localStorage.setItem(REVENUE_ACTUALS_KEY, JSON.stringify(actuals));
 }
 
+// Fast månedligt produktions-abonnement (kr/md) — trækkes fra hver måneds netto.
+const REVENUE_ABON_KEY = 'solar-revenue-abon-v1';
+function loadRevenueAbon() {
+  const v = parseFloat(localStorage.getItem(REVENUE_ABON_KEY));
+  return isNaN(v) ? 0 : v;
+}
+function saveRevenueAbon(value) {
+  if (value === '' || value === null || isNaN(parseFloat(value))) localStorage.removeItem(REVENUE_ABON_KEY);
+  else localStorage.setItem(REVENUE_ABON_KEY, String(parseFloat(value)));
+}
+
 function buildRevenueMonths(data) {
   const months = new Map();
   for (const d of data) {
@@ -1459,6 +1480,9 @@ function revenueDiffHtml(calculated, actualStr, smallThreshold) {
 
 function renderRevenueValidation(data) {
   const months = buildRevenueMonths(data);
+  // Fast månedligt produktions-abonnement trækkes fra hver måneds netto.
+  const abon = loadRevenueAbon();
+  for (const m of months.values()) { m.abonnement = abon; m.nettoRevenue -= abon; }
   state.revenueMonths = months;
 
   const actuals = loadRevenueActuals();
@@ -1478,6 +1502,7 @@ function renderRevenueValidation(data) {
             <span style="color:var(--muted)">− Energinet indfødning</span><span style="color:var(--red); text-align:right">−${fmtDKK(m.energinetIndfodning)}</span>
             <span style="color:var(--muted)">− Netselskab indfødning</span><span style="color:var(--red); text-align:right">−${fmtDKK(m.supplierIndfodning)}</span>
             <span style="color:var(--muted)">− Leverandørgebyr (t4)</span><span style="color:var(--red); text-align:right">−${fmtDKK(m.leverandor)}</span>
+            ${m.abonnement ? `<span style="color:var(--muted)">− Abonnement</span><span style="color:var(--red); text-align:right">−${fmtDKK(m.abonnement)}</span>` : ''}
             <span style="border-top:1px solid var(--border); padding-top:6px; font-weight:600">= Beregnet netto</span>
             <span style="border-top:1px solid var(--border); padding-top:6px; font-weight:600; text-align:right">${fmtDKK(m.nettoRevenue)}</span>
           </div>
@@ -2183,10 +2208,13 @@ function renderOverheadBreakdown() {
     const enePr   = ene?.production || {};
     const taxVal  = tax?.value ?? 0;
     const mkVal   = mk?.value ?? 0;
+    const aftage  = document.getElementById('aftagepligt').checked;
+    const netIndf = aftage ? 0 : (indf?.prices[0] || 0); // netselskab indfødning (0 ved aftagepligt)
+    const t4Oere  = +document.getElementById('t4').value || 0;
 
     const totalConsumption = (consMin + eneCons.systemTariff + eneCons.transmissionNetTariff + taxVal + mkVal) * 1.25 * 100;
     const totalConsumptionMax = (consMax + eneCons.systemTariff + eneCons.transmissionNetTariff + taxVal + mkVal) * 1.25 * 100;
-    const exportFradrag = (enePr.balancetariff + enePr.indfodningstariff + (indf?.prices[0] || 0)) * 1.25 * 100;
+    const exportFradrag = (enePr.balancetariff + enePr.indfodningstariff + netIndf) * 1.25 * 100;
 
     const bucketRows = Object.entries(buckets)
       .sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]))
@@ -2219,9 +2247,9 @@ function renderOverheadBreakdown() {
       <table style="width:100%; font-size:0.85rem; border-collapse:collapse; margin-bottom:14px;">
         <tr><td style="padding:3px 12px 3px 0; color:var(--muted)">Energinet indfødningstarif</td><td>${fmt(enePr.indfodningstariff * 1.25 * 100)}</td></tr>
         <tr><td style="padding:3px 12px 3px 0; color:var(--muted)">Energinet balancetarif</td><td>${fmt(enePr.balancetariff * 1.25 * 100)}</td></tr>
-        <tr><td style="padding:3px 12px 3px 0; color:var(--muted)">Netselskab indfødnings-tarif${indf ? '' : ' (intet match)'}</td><td>${fmt((indf?.prices[0] || 0) * 1.25 * 100)}</td></tr>
-        <tr><td style="padding:3px 12px 3px 0; color:var(--muted)">Leverandørs balancegebyr (manuel, t4)</td><td>${(+document.getElementById('t4').value).toFixed(2).replace('.', ',')} øre/kWh</td></tr>
-        <tr><td colspan="2" style="padding:8px 0 6px 0; border-top:1px solid var(--border); color:var(--accent);"><strong>Eksport-fradrag i alt:</strong> ${fmt(exportFradrag + +document.getElementById('t4').value)}</td></tr>
+        <tr><td style="padding:3px 12px 3px 0; color:var(--muted)">Netselskab indfødnings-tarif${aftage ? ' (aftagepligt: 0)' : indf ? '' : ' (intet match)'}</td><td>${fmt(netIndf * 1.25 * 100)}</td></tr>
+        <tr><td style="padding:3px 12px 3px 0; color:var(--muted)">Leverandørens produktions-gebyr/spread (manuel)</td><td>${t4Oere.toFixed(2).replace('.', ',')} øre/kWh</td></tr>
+        <tr><td colspan="2" style="padding:8px 0 6px 0; border-top:1px solid var(--border); color:var(--accent);"><strong>Eksport-fradrag i alt:</strong> ${fmt(exportFradrag + t4Oere)}</td></tr>
       </table>
 
       <details style="margin-top:14px;">
@@ -2246,7 +2274,7 @@ function renderOverheadBreakdown() {
       </details>
 
       <p style="font-size:0.78rem; color:var(--muted); margin-top:14px;">
-        Kilder: distribution + indfødning fra EDS DatahubPricelist (GLN ${td.mapEntry.gln}); Energinet + elafgift fra <code>data/constants/</code>; markup fra Strømligning. Leverandørs balancegebyr (t4) er manuelt indtastet.
+        Kilder: distribution + indfødning fra EDS DatahubPricelist (GLN ${td.mapEntry.gln}); Energinet + elafgift fra <code>data/constants/</code>; markup fra Strømligning. Leverandørens produktions-gebyr/spread er manuelt indtastet.
       </p>
     `;
   } else if (b) {
@@ -2289,19 +2317,26 @@ function renderAutoDiscoveryStatus() {
   const cfg = loadConfig();
   const el = document.getElementById('autoStatusBar');
   if (!el) return;
+  const perTime = !!(state.tariffData?.supplier && state.tariffData?.energinet && state.tariffData?.elafgift);
   const auto = [];
   const manual = [];
   if (cfg.priceArea)    auto.push('Prisområde'); else manual.push('Prisområde');
-  if (cfg.supplierId)   auto.push('Netselskab');  // — kun info, mapping til t3 mangler
+  if (cfg.supplierId)   auto.push('Netselskab');
   if (cfg.overheadOere) auto.push('Selvforbrugs-overhead'); else manual.push('Selvforbrugs-overhead');
-  // De fire eksport-tariffer er ikke auto-udfyldt endnu
-  manual.push('Eksport-fradrag (t1–t4)');
+
+  if (perTime) {
+    // EDS aktiv: eksport-tarifferne hentes automatisk; kun handler-vilkår er manuelt (ofte 0)
+    auto.push('Eksport-tariffer (fra EDS)');
+    manual.push('Leverandør-gebyr/spread og produktions-abonnement (valgfrit — ofte 0)');
+  } else {
+    manual.push('Eksport-fradrag (felterne under “Fradrag på eksportpris”)');
+  }
 
   el.style.display = 'block';
   el.innerHTML = `
     <strong>Auto-udfyldt fra adresse:</strong> ${auto.length ? auto.join(', ') : '— intet endnu'}
     <br>
-    <strong style="color:var(--accent)">Skal du selv kontrollere/udfylde:</strong> ${manual.join(', ')}
+    <strong style="color:var(--accent)">Skal du selv kontrollere/udfylde:</strong> ${manual.length ? manual.join(', ') : '— intet'}
   `;
 }
 
@@ -2421,9 +2456,15 @@ function updateExportDeductionUI() {
   }
 }
 
+// Gen-render "Vis udregning af overhead" hvis den allerede er åbnet (så t4/aftagepligt slår igennem).
+function refreshOverheadIfVisible() {
+  const det = document.getElementById('overheadDetails');
+  if (det && det.style.display !== 'none') renderOverheadBreakdown();
+}
+
 ['t1','t2','t3','t4'].forEach(id => document.getElementById(id).addEventListener('input', updateTotalFradrag));
-document.getElementById('t4').addEventListener('input', updateExportDeductionUI);
-document.getElementById('aftagepligt').addEventListener('change', () => { updateTotalFradrag(); updateExportDeductionUI(); });
+document.getElementById('t4').addEventListener('input', () => { updateExportDeductionUI(); refreshOverheadIfVisible(); });
+document.getElementById('aftagepligt').addEventListener('change', () => { updateTotalFradrag(); updateExportDeductionUI(); refreshOverheadIfVisible(); });
 updateExportDeductionUI();
 
 function setupDropZone(dropId, inputId, label, onLoad) {
@@ -2830,6 +2871,17 @@ document.addEventListener('keydown', e => {
     const v = e.target.value;
     saveBillConfig({ supplierSubscription: v === '' ? '' : parseFloat(v) || 0 });
     if (state.consumptionMonths) renderBillValidation();
+  });
+})();
+
+// Produktions-abonnement (afregnings-validering) — pre-fill + re-render ved ændring
+(function initRevenueAbonInput() {
+  const el = document.getElementById('revenueAbon');
+  const stored = localStorage.getItem(REVENUE_ABON_KEY);
+  if (stored !== null) el.value = stored;
+  el.addEventListener('input', e => {
+    saveRevenueAbon(e.target.value);
+    if (state.analysisData) renderRevenueValidation(state.analysisData);
   });
 })();
 
