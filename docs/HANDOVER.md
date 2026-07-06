@@ -64,12 +64,8 @@ Dette dokument beskriver hele projektets nuværende tilstand, så arbejdet kan f
 
 ## 2. Hvad mangler / kendte TODOs
 
-### Korrekthed (åbne)
-- **⚠️ Produktionsfradrag matcher ikke faktisk afregnings-opgørelse (2026-07-03).** De beregnede fradrag på eksportsiden (Energinets balance- + indfødningstarif, netselskabets indfødningstarif, leverandørgebyr) i "Netto eksport"/"Afregnings-validering" stemmer ikke med tallene på brugerens rigtige afregnings-opgørelse. Skal undersøges:
-  - Hvilke komponenter og satser står der faktisk på opgørelsen? Sammenlign post-for-post mod `lookupHourlyComponents()` og `analyze()`.
-  - Moms-håndtering på eksportsiden: `analyze()` ganger eksportfradrag med `1,25` (`exportFradragOere = (energinetBalance + energinetIndfodning + supplierIndfodning) * 1.25 * 100 + t4`) — er moms korrekt på produktion/salg, eller skal fradragene være uden moms?
-  - Er `t4` (leverandørgebyr) dobbeltregnet eller i forkert enhed?
-  - Verificér satserne i `data/tariffs/{GLN}.json` og `data/constants/energinet.json` mod opgørelsens periode.
+### Korrekthed
+- **✅ Produktionsfradrag rettet (2026-07-06).** Verificeret mod rigtig Vindstød-afregning (maj 2026, N1, 825 kWh): opgørelsen viser "Tariffer, skatter og afgifter −0,0215 kr/kWh" + moms (−4,43 kr = 25% af tarifferne). Det matcher **eksakt** vores tre eksport-tariffer (Energinet balance 0,0053 + Energinet indfødning 0,005 + N1 netselskab-indfødning 0,011157 = 0,021457 kr/kWh), og **moms ×1,25 er korrekt**. Den eneste fejl var `t4` (leverandørgebyr) med hårdkodet default **3,00 øre** — Vindstød opkræver intet sådant gebyr. Rettet: `t4` defaulter nu til **0**. Netto-eksport ramte derefter opgørelsens 56,38 øre/kWh præcist (før: 53,38). Traders der *faktisk* tager et fast produktions-gebyr kan stadig indtaste det.
 
 ### Data-fuldstændighed
 - **Videbæk Elnet** kunne ikke auto-matches til EDS (kun 34 af 38 Strømligning suppliers er backfillet). Skal undersøges hvor de findes i EDS.

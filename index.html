@@ -407,27 +407,41 @@
     <div id="overheadBreakdown" style="padding:0 14px 14px;"></div>
   </details>
 
-  <h3>Fradrag på eksportpris</h3>
+  <h3>Fradrag på eksportpris <span id="fradragMode" style="font-size:0.7rem; font-weight:500; padding:2px 9px; border-radius:10px; vertical-align:middle; margin-left:6px;"></span></h3>
+
+  <!-- Per-time EDS: automatiske, read-only fradrag (vises når netselskab har EDS-data) -->
+  <div id="fradragEds" style="display:none; margin-bottom:12px; padding:10px 14px; background:var(--bg); border:1px solid var(--border); border-radius:6px; font-size:0.85rem;">
+    <div style="color:var(--muted); margin-bottom:8px;">Hentes automatisk fra EDS per CSV-time (satser vist for i dag, inkl. moms ×1,25) — intet at udfylde her:</div>
+    <div id="fradragEdsRows" style="display:grid; grid-template-columns:1fr auto; gap:3px 24px; max-width:380px;"></div>
+  </div>
+
+  <!-- Manuel fallback: t1-t3 bruges kun når netselskab IKKE har EDS-historik -->
+  <div id="fradragManual">
+    <div class="tariff-grid" style="margin-bottom:12px;">
+      <div class="field">
+        <label>Energinets balancetarif<span class="help-icon" tabindex="0" role="img" aria-label="Hjælp" data-tip="Fast fradrag Energinet opkræver pr. kWh produktion du leverer til nettet. Trækkes fra spotprisen. Bruges KUN som fallback — når per-time EDS-data er aktivt, hentes den rigtige sats automatisk og dette felt ignoreres.">?</span></label>
+        <input type="number" id="t1" value="0.65" min="0" max="10" step="0.01">
+        <span class="field-unit">øre/kWh</span>
+      </div>
+      <div class="field">
+        <label>Energinets indfødningstarif<span class="help-icon" tabindex="0" role="img" aria-label="Hjælp" data-tip="Energinets indfødningstarif — fradrag pr. kWh du føder ind på transmissionsnettet. Bruges KUN som fallback — når per-time EDS-data er aktivt, hentes den rigtige sats automatisk og dette felt ignoreres.">?</span></label>
+        <input type="number" id="t2" value="0.50" min="0" max="10" step="0.01">
+        <span class="field-unit">øre/kWh</span>
+      </div>
+      <div class="field">
+        <label>Netselskabets indfødningstarif<span class="help-icon" tabindex="0" role="img" aria-label="Hjælp" data-tip="Dit netselskabs indfødningstarif pr. kWh leveret til nettet. Bruges KUN som fallback — når per-time EDS-data er aktivt, hentes den rigtige sats automatisk. Nulstilles ved aftagepligt.">?</span></label>
+        <input type="number" id="t3" value="0.47" min="0" max="20" step="0.01">
+        <span class="field-unit">øre/kWh (Radius: 0,47 — andet netselskab: tjek dit tillægsblad)</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leverandørgebyr: altid synligt — findes IKKE i EDS (kommercielt vilkår) -->
   <div class="tariff-grid" style="margin-bottom:12px;">
     <div class="field">
-      <label>Energinets balancetarif<span class="help-icon" tabindex="0" role="img" aria-label="Hjælp" data-tip="Fast fradrag Energinet opkræver pr. kWh produktion du leverer til nettet. Trækkes fra spotprisen. Bruges som fallback når per-time tarif-data mangler.">?</span></label>
-      <input type="number" id="t1" value="0.65" min="0" max="10" step="0.01">
-      <span class="field-unit">øre/kWh</span>
-    </div>
-    <div class="field">
-      <label>Energinets indfødningstarif<span class="help-icon" tabindex="0" role="img" aria-label="Hjælp" data-tip="Energinets indfødningstarif — fradrag pr. kWh du føder ind på transmissionsnettet. Trækkes fra spotprisen. Bruges som fallback når per-time tarif-data mangler.">?</span></label>
-      <input type="number" id="t2" value="0.50" min="0" max="10" step="0.01">
-      <span class="field-unit">øre/kWh</span>
-    </div>
-    <div class="field">
-      <label>Netselskabets indfødningstarif<span class="help-icon" tabindex="0" role="img" aria-label="Hjælp" data-tip="Dit netselskabs indfødningstarif pr. kWh leveret til nettet. Varierer mellem netselskaber — tjek dit tillægsblad. Sættes automatisk til 0 hvis du markerer aftagepligt nedenfor.">?</span></label>
-      <input type="number" id="t3" value="0.47" min="0" max="20" step="0.01">
-      <span class="field-unit">øre/kWh (Radius: 0,47 — andet netselskab: tjek dit tillægsblad)</span>
-    </div>
-    <div class="field">
-      <label>Leverandørens balancetarif / gebyr<span class="help-icon" tabindex="0" role="img" aria-label="Hjælp" data-tip="Gebyr dit elselskab tager for at afregne din produktion, pr. kWh. Anvendes altid — også når per-time tarif-data er aktivt — da Strømligning ikke leverer dette tal.">?</span></label>
-      <input type="number" id="t4" value="3.00" min="0" max="20" step="0.01">
-      <span class="field-unit">øre/kWh (Andel Energi: 3,00)</span>
+      <label>Leverandørens produktions-gebyr<span class="help-icon" tabindex="0" role="img" aria-label="Hjælp" data-tip="Ekstra fast gebyr pr. kWh som DIN elhandler evt. tager for at afregne din produktion — oveni de rigtige tariffer. Dette er det eneste eksport-fradrag der ikke findes i EDS. Mange (fx Vindstød 'variabel timepris') tager INTET, så lad den stå på 0. Sæt kun en værdi hvis gebyret faktisk står på din afregnings-opgørelse.">?</span></label>
+      <input type="number" id="t4" value="0" min="0" max="20" step="0.01">
+      <span class="field-unit">øre/kWh — ofte 0 (kun hvis din elhandler opkræver et fast produktions-gebyr)</span>
     </div>
   </div>
 
@@ -436,8 +450,8 @@
     <label for="aftagepligt">Mit anlæg er fritaget for indfødningstariffer (aftagepligt — typisk installeret før 2023). Netselskabets indfødningstarif sættes til 0.</label>
   </div>
 
-  <div style="margin-top: 8px; padding: 10px 14px; background: var(--bg); border-radius: 6px; font-size: 0.85rem; color: var(--muted);">
-    Samlet fradrag: <strong id="totalFradrag" style="color: var(--text);">4,62</strong> øre/kWh
+  <div id="fradragTotalBox" style="margin-top: 8px; padding: 10px 14px; background: var(--bg); border-radius: 6px; font-size: 0.85rem; color: var(--muted);">
+    Samlet fradrag (manuel): <strong id="totalFradrag" style="color: var(--text);">1,62</strong> øre/kWh
   </div>
 
   <h3 style="margin-top: 20px;">Grænseværdier</h3>
@@ -1081,6 +1095,7 @@ async function fetchSpotPrices(startDay, endDay, priceArea) {
 function getTariffs() {
   const aftagepligt = document.getElementById('aftagepligt').checked;
   return {
+    aftagepligt,
     t1: +document.getElementById('t1').value,
     t2: +document.getElementById('t2').value,
     t3: aftagepligt ? 0 : +document.getElementById('t3').value,
@@ -1170,11 +1185,12 @@ function analyze(exportRows, spotPrices, tariffs, tariffData) {
     if (hasPerHourData) {
       const c = lookupHourlyComponents(row.hourKey, tariffData);
       if (!c.dataComplete) incompleteRows++;
+      // Aftagepligt: fritaget for netselskabets indfødningstarif → nulstil den (også i per-time mode)
+      if (tariffs.aftagepligt) c.supplierIndfodning = 0;
       // Forbrugsside: consumer_price = (spot + alle forbrugs-komponenter) × 1,25
       const consumptionExVatKr = c.distribution + c.systemTariff + c.transmissionNetTariff + c.elafgift + c.markup;
       selvforbrugVaerdi = spotOere * 1.25 + consumptionExVatKr * 1.25 * 100;
-      // Eksportside: fradrag = Energinet balance + indfødning + supplier indfødning + leverandør (t4)
-      // Manual t4 beholdes (Strømligning leverer ikke leverandør-balance for produktion)
+      // Eksportside: fradrag = Energinet balance + indfødning + netselskab indfødning (fra EDS) + evt. leverandørgebyr (t4)
       const exportFradragExVatKr = c.energinetBalance + c.energinetIndfodning + c.supplierIndfodning;
       const exportFradragOere = exportFradragExVatKr * 1.25 * 100 + tariffs.t4;
       nettoEksportOere = spotOere - exportFradragOere;
@@ -2116,6 +2132,7 @@ async function applyQuickConfig() {
     } else {
       state.tariffData = null;
     }
+    updateExportDeductionUI();
 
     qcStatus.style.color = 'var(--green)';
     const statusMsg = staticData
@@ -2322,6 +2339,7 @@ btnApply.addEventListener('click', applyQuickConfig);
       state.tariffData = { ...staticData, markup };
     }
   }
+  updateExportDeductionUI();
 
   renderAutoDiscoveryStatus();
   if (cfg.overheadBreakdown) renderOverheadBreakdown();
@@ -2336,8 +2354,61 @@ function updateTotalFradrag() {
   document.getElementById('totalFradrag').textContent = total.toFixed(2).replace('.', ',');
 }
 
+// Dagens EDS-eksportfradrag (øre/kWh inkl. moms) eller null hvis per-time ikke aktivt.
+function edsExportComponents() {
+  const td = state.tariffData;
+  if (!(td?.supplier && td?.energinet && td?.elafgift)) return null;
+  const now = new Date();
+  const hourKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}T12`;
+  const c = lookupHourlyComponents(hourKey, td);
+  const aftage = document.getElementById('aftagepligt').checked;
+  const oere = kr => kr * 1.25 * 100; // ex moms kr/kWh → øre/kWh inkl. moms
+  return {
+    energinetBalance: oere(c.energinetBalance),
+    energinetIndfodning: oere(c.energinetIndfodning),
+    supplierIndfodning: aftage ? 0 : oere(c.supplierIndfodning),
+  };
+}
+
+// Skift mellem EDS-tilstand (read-only, automatisk) og manuel fallback for eksport-fradraget.
+function updateExportDeductionUI() {
+  const eds = edsExportComponents();
+  const badge = document.getElementById('fradragMode');
+  const manualEl = document.getElementById('fradragManual');
+  const edsEl = document.getElementById('fradragEds');
+  const totalBox = document.getElementById('fradragTotalBox');
+  const t4 = +document.getElementById('t4').value || 0;
+  const fmt = v => v.toFixed(2).replace('.', ',') + ' øre';
+
+  if (eds) {
+    badge.textContent = 'Tariffer fra EDS (per time)';
+    badge.style.background = 'rgba(34,197,94,0.15)';
+    badge.style.color = 'var(--green)';
+    manualEl.style.display = 'none';
+    totalBox.style.display = 'none';
+    edsEl.style.display = 'block';
+    const total = eds.energinetBalance + eds.energinetIndfodning + eds.supplierIndfodning + t4;
+    document.getElementById('fradragEdsRows').innerHTML =
+      `<span style="color:var(--muted)">Energinet balancetarif</span><span style="text-align:right">${fmt(eds.energinetBalance)}</span>` +
+      `<span style="color:var(--muted)">Energinet indfødningstarif</span><span style="text-align:right">${fmt(eds.energinetIndfodning)}</span>` +
+      `<span style="color:var(--muted)">Netselskabets indfødningstarif</span><span style="text-align:right">${fmt(eds.supplierIndfodning)}</span>` +
+      (t4 ? `<span style="color:var(--muted)">Leverandørgebyr (manuel)</span><span style="text-align:right">${fmt(t4)}</span>` : '') +
+      `<span style="border-top:1px solid var(--border); padding-top:5px; margin-top:2px; font-weight:600; color:var(--text)">Fradrag i alt</span>` +
+      `<span style="border-top:1px solid var(--border); padding-top:5px; margin-top:2px; font-weight:600; text-align:right; color:var(--text)">${fmt(total)}</span>`;
+  } else {
+    badge.textContent = 'Manuel fallback';
+    badge.style.background = 'rgba(245,158,11,0.15)';
+    badge.style.color = 'var(--accent)';
+    manualEl.style.display = '';
+    totalBox.style.display = '';
+    edsEl.style.display = 'none';
+  }
+}
+
 ['t1','t2','t3','t4'].forEach(id => document.getElementById(id).addEventListener('input', updateTotalFradrag));
-document.getElementById('aftagepligt').addEventListener('change', updateTotalFradrag);
+document.getElementById('t4').addEventListener('input', updateExportDeductionUI);
+document.getElementById('aftagepligt').addEventListener('change', () => { updateTotalFradrag(); updateExportDeductionUI(); });
+updateExportDeductionUI();
 
 function setupDropZone(dropId, inputId, label, onLoad) {
   const drop = document.getElementById(dropId);
