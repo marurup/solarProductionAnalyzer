@@ -439,9 +439,9 @@
   <!-- Leverandørgebyr: altid synligt — findes IKKE i EDS (kommercielt vilkår) -->
   <div class="tariff-grid" style="margin-bottom:12px;">
     <div class="field">
-      <label>Leverandørens produktions-gebyr<span class="help-icon" tabindex="0" role="img" aria-label="Hjælp" data-tip="Ekstra fast gebyr pr. kWh som DIN elhandler evt. tager for at afregne din produktion — oveni de rigtige tariffer. Dette er det eneste eksport-fradrag der ikke findes i EDS. Mange (fx Vindstød 'variabel timepris') tager INTET, så lad den stå på 0. Sæt kun en værdi hvis gebyret faktisk står på din afregnings-opgørelse.">?</span></label>
+      <label>Leverandørens produktions-gebyr<span class="help-icon" tabindex="0" role="img" aria-label="Hjælp" data-tip="Fast beløb pr. kWh som DIN elhandler beholder på din produktion — oveni de rigtige tariffer, enten som et gebyr eller som et spread i afregningsprisen. Dette er det eneste eksport-fradrag der ikke findes i EDS. Eksempel: Vindstød 'variabel timepris' tager 1 øre/kWh. Tjek din afregnings-opgørelse — er afregningsprisen 1 øre lavere end spotprisen, så sæt 1 her.">?</span></label>
       <input type="number" id="t4" value="0" min="0" max="20" step="0.01">
-      <span class="field-unit">øre/kWh — ofte 0 (kun hvis din elhandler opkræver et fast produktions-gebyr)</span>
+      <span class="field-unit">øre/kWh — elhandlerens spread/gebyr (fx Vindstød: 1)</span>
     </div>
   </div>
 

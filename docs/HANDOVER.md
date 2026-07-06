@@ -65,7 +65,11 @@ Dette dokument beskriver hele projektets nuværende tilstand, så arbejdet kan f
 ## 2. Hvad mangler / kendte TODOs
 
 ### Korrekthed
-- **✅ Produktionsfradrag rettet (2026-07-06).** Verificeret mod rigtig Vindstød-afregning (maj 2026, N1, 825 kWh): opgørelsen viser "Tariffer, skatter og afgifter −0,0215 kr/kWh" + moms (−4,43 kr = 25% af tarifferne). Det matcher **eksakt** vores tre eksport-tariffer (Energinet balance 0,0053 + Energinet indfødning 0,005 + N1 netselskab-indfødning 0,011157 = 0,021457 kr/kWh), og **moms ×1,25 er korrekt**. Den eneste fejl var `t4` (leverandørgebyr) med hårdkodet default **3,00 øre** — Vindstød opkræver intet sådant gebyr. Rettet: `t4` defaulter nu til **0**. Netto-eksport ramte derefter opgørelsens 56,38 øre/kWh præcist (før: 53,38). Traders der *faktisk* tager et fast produktions-gebyr kan stadig indtaste det.
+- **✅ Produktionsfradrag verificeret (2026-07-06).** Fuldt afstemt mod to rigtige Vindstød-afregninger (N1): april 2026 (511 kWh → 159,37 kr) og maj 2026 (825 kWh → 465,39 kr). Konklusioner:
+  - **Tarifferne er korrekte:** opgørelsens "Tariffer, skatter og afgifter −0,0215 kr/kWh" matcher **eksakt** vores tre EDS-tariffer (Energinet balance 0,0053 + Energinet indfødning 0,005 + N1 netselskab-indfødning 0,011157 = 0,021457 kr/kWh).
+  - **Moms ×1,25 er korrekt** (opgørelsens moms = 25% af tarifferne alene, ikke af salget).
+  - **`t4`-default var fejlen:** hårdkodet **3,00 øre** → rettet til **0** (neutral baseline).
+  - **Vindstød tager et fast spread på 1,00 øre/kWh** (bekræftet konstant over begge måneder: de betaler spot − 1 øre). Det modelleres med `t4 = 1,0`. Med den værdi rammer beregnet netto begge opgørelser til øren. `t4`-feltet dækker altså både gebyr OG spread; default 0 fordi det er handler-specifikt.
 
 ### Data-fuldstændighed
 - **Videbæk Elnet** kunne ikke auto-matches til EDS (kun 34 af 38 Strømligning suppliers er backfillet). Skal undersøges hvor de findes i EDS.
