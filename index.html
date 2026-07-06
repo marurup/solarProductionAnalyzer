@@ -411,8 +411,8 @@
 
   <!-- Per-time EDS: automatiske, read-only fradrag (vises når netselskab har EDS-data) -->
   <div id="fradragEds" style="display:none; margin-bottom:12px; padding:10px 14px; background:var(--bg); border:1px solid var(--border); border-radius:6px; font-size:0.85rem;">
-    <div style="color:var(--muted); margin-bottom:8px;">Hentes automatisk fra EDS per CSV-time (satser vist for i dag, inkl. moms ×1,25) — intet at udfylde her:</div>
-    <div id="fradragEdsRows" style="display:grid; grid-template-columns:1fr auto; gap:3px 24px; max-width:380px;"></div>
+    <div style="color:var(--muted); margin-bottom:8px;">Hentes automatisk fra EDS per CSV-time (satser vist for i dag) — intet at udfylde her. Moms er kun på tarifferne, ikke på leverandørgebyret:</div>
+    <div id="fradragEdsRows" style="display:grid; grid-template-columns:1fr auto auto; gap:3px 28px; max-width:440px;"></div>
   </div>
 
   <!-- Manuel fallback: t1-t3 bruges kun når netselskab IKKE har EDS-historik -->
@@ -2354,7 +2354,7 @@ function updateTotalFradrag() {
   document.getElementById('totalFradrag').textContent = total.toFixed(2).replace('.', ',');
 }
 
-// Dagens EDS-eksportfradrag (øre/kWh inkl. moms) eller null hvis per-time ikke aktivt.
+// Dagens EDS-eksportfradrag (øre/kWh EKSKL. moms) eller null hvis per-time ikke aktivt.
 function edsExportComponents() {
   const td = state.tariffData;
   if (!(td?.supplier && td?.energinet && td?.elafgift)) return null;
@@ -2362,7 +2362,7 @@ function edsExportComponents() {
   const hourKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}T12`;
   const c = lookupHourlyComponents(hourKey, td);
   const aftage = document.getElementById('aftagepligt').checked;
-  const oere = kr => kr * 1.25 * 100; // ex moms kr/kWh → øre/kWh inkl. moms
+  const oere = kr => kr * 100; // kr/kWh → øre/kWh (ekskl. moms)
   return {
     energinetBalance: oere(c.energinetBalance),
     energinetIndfodning: oere(c.energinetIndfodning),
@@ -2387,14 +2387,30 @@ function updateExportDeductionUI() {
     manualEl.style.display = 'none';
     totalBox.style.display = 'none';
     edsEl.style.display = 'block';
-    const total = eds.energinetBalance + eds.energinetIndfodning + eds.supplierIndfodning + t4;
-    document.getElementById('fradragEdsRows').innerHTML =
-      `<span style="color:var(--muted)">Energinet balancetarif</span><span style="text-align:right">${fmt(eds.energinetBalance)}</span>` +
-      `<span style="color:var(--muted)">Energinet indfødningstarif</span><span style="text-align:right">${fmt(eds.energinetIndfodning)}</span>` +
-      `<span style="color:var(--muted)">Netselskabets indfødningstarif</span><span style="text-align:right">${fmt(eds.supplierIndfodning)}</span>` +
-      (t4 ? `<span style="color:var(--muted)">Leverandørgebyr (manuel)</span><span style="text-align:right">${fmt(t4)}</span>` : '') +
-      `<span style="border-top:1px solid var(--border); padding-top:5px; margin-top:2px; font-weight:600; color:var(--text)">Fradrag i alt</span>` +
-      `<span style="border-top:1px solid var(--border); padding-top:5px; margin-top:2px; font-weight:600; text-align:right; color:var(--text)">${fmt(total)}</span>`;
+
+    // Moms lægges kun på tarifferne (ikke på t4-gebyret) — præcis som på afregnings-opgørelsen.
+    const comps = [
+      ['Energinet balancetarif', eds.energinetBalance, true],
+      ['Energinet indfødningstarif', eds.energinetIndfodning, true],
+      ['Netselskabets indfødningstarif', eds.supplierIndfodning, true],
+    ];
+    if (t4) comps.push(['Leverandørgebyr (manuel)', t4, false]);
+
+    const th = 'color:var(--muted); text-align:right; font-size:0.78rem;';
+    let html = `<span></span><span style="${th}">ekskl. moms</span><span style="${th}">inkl. moms</span>`;
+    let totEx = 0, totIncl = 0;
+    for (const [label, exOere, hasVat] of comps) {
+      const inclOere = hasVat ? exOere * 1.25 : exOere; // t4: ingen moms
+      totEx += exOere; totIncl += inclOere;
+      html += `<span style="color:var(--muted)">${label}</span>` +
+        `<span style="text-align:right">${fmt(exOere)}</span>` +
+        `<span style="text-align:right">${fmt(inclOere)}</span>`;
+    }
+    const tot = 'border-top:1px solid var(--border); padding-top:5px; margin-top:2px; font-weight:600; color:var(--text)';
+    html += `<span style="${tot}">Fradrag i alt</span>` +
+      `<span style="${tot}; text-align:right">${fmt(totEx)}</span>` +
+      `<span style="${tot}; text-align:right">${fmt(totIncl)}</span>`;
+    document.getElementById('fradragEdsRows').innerHTML = html;
   } else {
     badge.textContent = 'Manuel fallback';
     badge.style.background = 'rgba(245,158,11,0.15)';
