@@ -457,9 +457,13 @@
   <h3 style="margin-top: 20px;">Grænseværdier</h3>
   <div class="tariff-grid">
     <div class="field">
-      <label>"Dårlig" eksporttime — under denne nettopris<span class="help-icon" tabindex="0" role="img" aria-label="Hjælp" data-tip="En eksporttime markeres 'Dårlig' (rød) når nettoprisen — spot minus alle fradrag — er lavere end denne værdi. Kan sættes negativ for kun at fange timer med negativ pris.">?</span></label>
-      <input type="number" id="badThreshold" value="10" min="-100" max="100" step="1">
+      <label>"Dårlig" eksporttime — under denne nettopris<span class="help-icon" tabindex="0" role="img" aria-label="Hjælp" data-tip="En eksporttime markeres 'Dårlig' (rød) når nettoprisen — spot minus alle fradrag — er lavere end denne værdi. Kan sættes negativ for kun at fange timer med negativ pris. Break-even = 0: der er nettoprisen 0, dvs. spotprisen præcis lig med dine samlede fradrag — under det betaler du reelt for at eksportere.">?</span></label>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <input type="number" id="badThreshold" value="10" min="-100" max="100" step="1" style="flex:1; min-width:0;">
+        <button type="button" class="btn btn-secondary" id="btnBreakEven" style="font-size:0.78rem; padding:6px 10px; white-space:nowrap;">Sæt til break-even</button>
+      </div>
       <span class="field-unit">øre/kWh netto (inkl. negative priser)</span>
+      <span class="field-unit" id="breakEvenNote" style="margin-top:2px; color:var(--muted);"></span>
     </div>
     <div class="field">
       <label>"Advarsel" — gul markering under<span class="help-icon" tabindex="0" role="img" aria-label="Hjælp" data-tip="En eksporttime får en gul 'Advarsel'-markering når nettoprisen ligger mellem 'Dårlig'-grænsen og denne værdi.">?</span></label>
@@ -1292,16 +1296,17 @@ function analyzeConsumption(forbrugRows, spotPrices, tariffData, tariffs) {
 
 // ─── Rendering ────────────────────────────────────────────────────────────────
 
-function renderResults(data, tariffs) {
+function renderResults(data, tariffs, { focus = true } = {}) {
   document.getElementById('results').style.display = 'block';
-  // Switch from debug tab (opened at analysis start) to results tab
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-  document.querySelector('.tab[data-tab="bad"]').classList.add('active');
-  document.getElementById('tab-bad').classList.add('active');
-  document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
-
-  state.showAllBad = false; // ny analyse → start afgrænset i "Problematiske timer"
+  if (focus) {
+    // Switch to results tab + scroll (kun ved ny analyse — ikke ved live grænseværdi-ændring)
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelector('.tab[data-tab="bad"]').classList.add('active');
+    document.getElementById('tab-bad').classList.add('active');
+    document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
+    state.showAllBad = false; // ny analyse → start afgrænset i "Problematiske timer"
+  }
 
   const bad = data.filter(d => d.isDaarlig);
   const totalKwh = data.reduce((s, d) => s + d.kwh, 0);
@@ -2454,6 +2459,7 @@ function updateExportDeductionUI() {
     totalBox.style.display = '';
     edsEl.style.display = 'none';
   }
+  if (typeof updateBreakEvenNote === 'function') updateBreakEvenNote();
 }
 
 // Gen-render "Vis udregning af overhead" hvis den allerede er åbnet (så t4/aftagepligt slår igennem).
@@ -2466,6 +2472,49 @@ function refreshOverheadIfVisible() {
 document.getElementById('t4').addEventListener('input', () => { updateExportDeductionUI(); refreshOverheadIfVisible(); });
 document.getElementById('aftagepligt').addEventListener('change', () => { updateTotalFradrag(); updateExportDeductionUI(); refreshOverheadIfVisible(); });
 updateExportDeductionUI();
+
+// Break-even: spotprisen hvor netto = 0 = dine samlede fradrag i dag (øre/kWh inkl. moms + t4).
+function exportBreakEvenOere() {
+  const t4 = +document.getElementById('t4').value || 0;
+  const eds = edsExportComponents(); // ex-moms øre, aftagepligt allerede anvendt
+  if (eds) return (eds.energinetBalance + eds.energinetIndfodning + eds.supplierIndfodning) * 1.25 + t4;
+  // manuel fallback: t1+t2+t3(+aftagepligt)+t4, alle i øre
+  const aftage = document.getElementById('aftagepligt').checked;
+  const t3 = aftage ? 0 : (+document.getElementById('t3').value || 0);
+  return (+document.getElementById('t1').value || 0) + (+document.getElementById('t2').value || 0) + t3 + t4;
+}
+
+function updateBreakEvenNote() {
+  const el = document.getElementById('breakEvenNote');
+  if (!el) return;
+  const be = exportBreakEvenOere();
+  el.textContent = `Break-even = 0: du betaler for at eksportere når spotprisen er under dine fradrag ≈ ${be.toFixed(2).replace('.', ',')} øre/kWh (i dag).`;
+}
+
+// Gen-anvend grænseværdier på en allerede kørt analyse — genberegner kun flag'ene
+// (netto/tabt er uændret), uden tab-skift/scroll. Billigt: ingen tariff-opslag.
+function reapplyThresholds() {
+  const data = state.analysisData;
+  if (!data) return;
+  const tariffs = getTariffs();
+  for (const d of data) {
+    const meetsMin = d.kwh >= tariffs.minExportKwh;
+    d.isDaarlig = meetsMin && d.nettoEksportOere < tariffs.badThreshold;
+    d.isWarn = meetsMin && d.nettoEksportOere >= tariffs.badThreshold && d.nettoEksportOere < tariffs.warnThreshold;
+  }
+  renderResults(data, tariffs, { focus: false });
+}
+
+document.getElementById('btnBreakEven').addEventListener('click', () => {
+  document.getElementById('badThreshold').value = 0;
+  reapplyThresholds();
+});
+['badThreshold', 'warnThreshold', 'minExportKwh'].forEach(id =>
+  document.getElementById(id).addEventListener('input', reapplyThresholds));
+// Noten afhænger af fradraget → opdatér når fradrags-input ændres
+['t1','t2','t3','t4'].forEach(id => document.getElementById(id).addEventListener('input', updateBreakEvenNote));
+document.getElementById('aftagepligt').addEventListener('change', updateBreakEvenNote);
+updateBreakEvenNote();
 
 function setupDropZone(dropId, inputId, label, onLoad) {
   const drop = document.getElementById(dropId);
