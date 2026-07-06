@@ -65,11 +65,16 @@ Dette dokument beskriver hele projektets nuværende tilstand, så arbejdet kan f
 ## 2. Hvad mangler / kendte TODOs
 
 ### Korrekthed
-- **✅ Produktionsfradrag verificeret (2026-07-06).** Fuldt afstemt mod to rigtige Vindstød-afregninger (N1): april 2026 (511 kWh → 159,37 kr) og maj 2026 (825 kWh → 465,39 kr). Konklusioner:
-  - **Tarifferne er korrekte:** opgørelsens "Tariffer, skatter og afgifter −0,0215 kr/kWh" matcher **eksakt** vores tre EDS-tariffer (Energinet balance 0,0053 + Energinet indfødning 0,005 + N1 netselskab-indfødning 0,011157 = 0,021457 kr/kWh).
-  - **Moms ×1,25 er korrekt** (opgørelsens moms = 25% af tarifferne alene, ikke af salget).
-  - **`t4`-default var fejlen:** hårdkodet **3,00 øre** → rettet til **0** (neutral baseline).
-  - **Vindstød tager et fast spread på 1,00 øre/kWh** (bekræftet konstant over begge måneder: de betaler spot − 1 øre). Det modelleres med `t4 = 1,0`. Med den værdi rammer beregnet netto begge opgørelser til øren. `t4`-feltet dækker altså både gebyr OG spread; default 0 fordi det er handler-specifikt.
+- **✅ Produktionsafregning fuldt verificeret over 20 måneder (2026-07-07).** Afstemt mod ALLE brugerens rigtige Vindstød-afregninger (N1, DK1) fra 2024-10 til 2026-05:
+  - **kWh matcher eksakt** alle 20 måneder (bekræfter CSV-parsing, per-serie aggregering og time-opslag).
+  - **Beregnet netto matcher inden for ±0,02 kr/måned** (ren øre-afrunding). Total over 20 mdr: app 3284,60 kr vs. opgørelse 3284,61 kr → −0,01 kr.
+  - **Delvis første måned håndteret korrekt:** 2024-10 dækker kun 28.–31. okt (25 kWh); verifikationen filtrerede appens eksport til den faktiske periode.
+  - **Metode:** `pdftotext -layout` udtræk af hver afregnings-PDF (periode, kWh, produktions-beløb, tarif-beløb), sammenlignet med appens netto = spot − (Energinet balance + Energinet indfødning + N1 netselskab-indfødning) × 1,25 − `t4`. PDF'erne ligger i `test-data/afregninger/` (git-ignoreret).
+  - **Nøglekonklusioner:** tarifferne (EDS) er korrekte; **moms ×1,25 er korrekt** (kun på tarifferne, ikke på salget); **`t4`-default rettet 3,00 → 0**; **Vindstød tager et fast spread på 1,00 øre/kWh** (spot − 1 øre) → modelleres med `t4 = 1,0`. `t4` dækker både gebyr OG spread; default 0 fordi det er handler-specifikt.
+
+### Næste skridt (planlagt)
+- **Verificér elforbrug-regninger** på samme grundige måde som produktionsafregningerne blev (2026-07-07). Sammenlign "Elforbrug-validering"-fanens beregnede månedsregning mod brugerens faktiske el-regninger (fx PDF-udtræk med `pdftotext -layout`). Tjek særligt: forbrugstariffer per time-på-døgnet (distribution), Energinet system+transmission, elafgift, leverandørtillæg (markup fra Strømligning), moms, og faste abonnementer (netselskab + elselskab, kr/md). Bekræft at kWh og totaler matcher regningerne.
+- **Liste med produktionsaftagere (el-handelsselskaber).** Undersøg om vi kan lave en dropdown/kurateret liste over solcelle-afregningsvilkår per handelsselskab (Vindstød = 1 øre/kWh spread, + evt. abonnement; Modstrøm, Norlys, Andel, EWII m.fl.). EDS har det IKKE (kun regulerede tariffer). Afklaring: har Strømligning/Elpristavlen struktureret produktions-/solcelledata, eller skal det researches og vedligeholdes manuelt? Modellen skal kunne dække fast øre/kWh-spread, evt. % af spot, og månedligt abonnement. Den bekræftede Vindstød-model (1 øre spread) er dokumenteret ovenfor under "Korrekthed".
 
 ### Data-fuldstændighed
 - **Videbæk Elnet** kunne ikke auto-matches til EDS (kun 34 af 38 Strømligning suppliers er backfillet). Skal undersøges hvor de findes i EDS.
