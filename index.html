@@ -56,6 +56,11 @@
     .step.active .step-num { background: var(--accent); color: #000; }
     .step.done .step-num { background: var(--green); color: #000; }
 
+    /* Konfig-afsnit (netselskab / køb / salg) */
+    .config-part { margin-bottom: 20px; padding: 16px 18px; border: 1px solid var(--border); border-radius: 8px; }
+    .config-part > h3:first-child { margin-top: 0; }
+    .config-part > p:first-of-type { margin-top: 0; }
+
     /* Upload zones */
     .upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
     @media (max-width: 600px) { .upload-grid { grid-template-columns: 1fr; } }
@@ -346,14 +351,14 @@
 <div class="card" id="section-config">
   <h2>2. Sæt tariffer — køb og salg</h2>
 
-  <!-- Genvej: udfyld tarifferne automatisk via adresse + Strømligning -->
-  <div id="section-quickconfig" style="margin-bottom:22px; padding:16px 18px; background:var(--bg); border:1px solid var(--border); border-radius:8px;">
-    <h3 style="margin-top:0;">Genvej: udfyld via adresse <span style="color:var(--muted); font-size:0.78rem; font-weight:400">(valgfrit)</span></h3>
-    <p style="margin-bottom:14px">Skriv din adresse, vælg dit netselskab og elaftale — så udfyldes tarifferne (selvforbrugs-overhead og eksport-fradrag) automatisk ud fra <a href="https://stromligning.dk" target="_blank" style="color:var(--accent)">Strømligning</a>. Indstillingerne gemmes lokalt i din browser.</p>
+  <!-- AFSNIT 1: Netselskab — fælles for køb og salg (udfyldes via adresse) -->
+  <div id="section-quickconfig" class="config-part">
+    <h3>Netselskab &amp; område <span style="color:var(--muted); font-size:0.78rem; font-weight:400">— fælles for køb og salg</span></h3>
+    <p style="margin-bottom:14px">Dit netselskab står for transporten af strømmen og opkræver tariffer <strong>begge veje</strong> — distribution når du køber, indfødning når du sælger. Det bestemmes af din adresse og er derfor fælles. Skriv adressen, vælg netselskab og elaftale, så udfyldes tarifferne automatisk ud fra <a href="https://stromligning.dk" target="_blank" style="color:var(--accent)">Strømligning</a>. Indstillingerne gemmes lokalt i din browser.</p>
 
     <div class="field" style="margin-bottom:14px; position:relative;">
       <label>Adresse</label>
-      <input type="text" id="addressInput" placeholder="Begynd at skrive — fx 'Nørrebrogade 1, 2200'" autocomplete="off" style="width:100%; background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:8px 12px; color:var(--text); font-size:0.95rem;">
+      <input type="text" id="addressInput" placeholder="Begynd at skrive — fx 'Nørrebrogade 1, 2200'" autocomplete="off" style="width:100%; background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:8px 12px; color:var(--text); font-size:0.95rem;">
       <div id="addressSuggestions" style="display:none; position:absolute; top:100%; left:0; right:0; background:var(--surface); border:1px solid var(--border); border-radius:6px; margin-top:2px; max-height:240px; overflow-y:auto; z-index:50;"></div>
       <span class="field-unit" id="addressHint" style="margin-top:6px;"></span>
     </div>
@@ -365,51 +370,56 @@
         <span class="field-unit" id="supplierHint"></span>
       </div>
       <div class="field">
-        <label>Elselskab</label>
-        <select id="companySelect"><option value="">— vælg —</option></select>
+        <label>Prisområde<span class="help-icon" tabindex="0" role="img" aria-label="Hjælp" data-tip="Bestemmer hvilke spotpriser der hentes — fælles for køb og salg. Vestdanmark (Jylland og Fyn) = DK1; Østdanmark (Sjælland, Lolland-Falster og Bornholm) = DK2. Sættes automatisk ud fra dit postnummer.">?</span></label>
+        <select id="priceArea">
+          <option value="DK2">DK2 (Sjælland, Fyn, Bornholm)</option>
+          <option value="DK1">DK1 (Jylland, Fyn)</option>
+        </select>
       </div>
     </div>
 
     <div class="tariff-grid" style="margin-bottom:14px;">
       <div class="field">
+        <label>Elselskab</label>
+        <select id="companySelect"><option value="">— vælg —</option></select>
+      </div>
+      <div class="field">
         <label>Elaftale</label>
         <select id="productSelect"><option value="">— vælg elselskab først —</option></select>
       </div>
-      <div class="field" style="align-self:end;">
-        <button class="btn" id="btnApplyConfig" disabled>Anvend konfiguration</button>
-      </div>
+    </div>
+
+    <div style="margin-bottom:14px;">
+      <button class="btn" id="btnApplyConfig" disabled>Anvend konfiguration</button>
     </div>
 
     <div id="quickConfigStatus" style="display:none; font-size:0.83rem; padding:10px 14px; background:rgba(34,197,94,0.08); border:1px solid rgba(34,197,94,0.25); border-radius:6px; color:var(--green);"></div>
   </div>
 
-  <div id="autoStatusBar" style="display:none; margin-bottom:16px; padding:10px 14px; background:var(--bg); border:1px solid var(--border); border-radius:6px; font-size:0.85rem;"></div>
+  <div id="autoStatusBar" style="display:none; margin-bottom:20px; padding:10px 14px; background:var(--bg); border:1px solid var(--border); border-radius:6px; font-size:0.85rem;"></div>
 
-  <h3 style="margin-top:0;">Køb — når du selvforbruger</h3>
+  <!-- AFSNIT 2: Køb -->
+  <div class="config-part">
+    <h3>Køb — når du selvforbruger</h3>
+    <p style="margin-bottom:14px; color:var(--muted); font-size:0.85rem;">Det du sparer ved at bruge din egen strøm frem for at købe fra nettet: spotpris + alle forbrugstariffer og elafgift, inkl. moms.</p>
 
-  <div class="row" style="margin-bottom:16px; gap:20px;">
-    <div class="field">
-      <label>Prisområde<span class="help-icon" tabindex="0" role="img" aria-label="Hjælp" data-tip="Bestemmer hvilke spotpriser der hentes. Vestdanmark (Jylland og Fyn) = DK1; Østdanmark (Sjælland, Lolland-Falster og Bornholm) = DK2.">?</span></label>
-      <select id="priceArea">
-        <option value="DK2">DK2 (Sjælland, Fyn, Bornholm)</option>
-        <option value="DK1">DK1 (Jylland, Fyn)</option>
-      </select>
-    </div>
-    <div class="field">
+    <div class="field" style="max-width:420px;">
       <label>Tariff-overhead (alt over spot × 1,25)<span class="help-icon" tabindex="0" role="img" aria-label="Hjælp" data-tip="Alt oven i spotprisen når du selvforbruger: nettarif + elafgift + leverandørtillæg + Energinet-tariffer, i øre/kWh inkl. moms. Bruges kun som fallback — når per-time tarif-data er aktivt, beregnes det automatisk pr. time i stedet.">?</span></label>
       <input type="number" id="selfConsumpOverhead" value="55" min="0" max="400" step="1">
       <span class="field-unit">øre/kWh m. moms — nettarif + elafgift + leverandørtillæg + Energinet-tariffer</span>
     </div>
+
+    <details id="overheadDetails" style="display:none; margin-top:14px; background:var(--bg); border:1px solid var(--border); border-radius:8px;">
+      <summary style="cursor:pointer; padding:10px 14px; font-size:0.85rem; color:var(--accent); font-weight:500; user-select:none;">
+        Vis udregning af overhead
+      </summary>
+      <div id="overheadBreakdown" style="padding:0 14px 14px;"></div>
+    </details>
   </div>
 
-  <details id="overheadDetails" style="display:none; margin-top:14px; background:var(--bg); border:1px solid var(--border); border-radius:8px;">
-    <summary style="cursor:pointer; padding:10px 14px; font-size:0.85rem; color:var(--accent); font-weight:500; user-select:none;">
-      Vis udregning af overhead
-    </summary>
-    <div id="overheadBreakdown" style="padding:0 14px 14px;"></div>
-  </details>
-
-  <h3>Salg — fradrag på eksportprisen <span id="fradragMode" style="font-size:0.7rem; font-weight:500; padding:2px 9px; border-radius:10px; vertical-align:middle; margin-left:6px;"></span></h3>
+  <!-- AFSNIT 3: Salg -->
+  <div class="config-part">
+    <h3>Salg — fradrag på eksportprisen <span id="fradragMode" style="font-size:0.7rem; font-weight:500; padding:2px 9px; border-radius:10px; vertical-align:middle; margin-left:6px;"></span></h3>
 
   <!-- Per-time EDS: automatiske, read-only fradrag (vises når netselskab har EDS-data) -->
   <div id="fradragEds" style="display:none; margin-bottom:12px; padding:10px 14px; background:var(--bg); border:1px solid var(--border); border-radius:6px; font-size:0.85rem;">
@@ -452,11 +462,12 @@
     <label for="aftagepligt">Mit anlæg er fritaget for indfødningstariffer (aftagepligt — typisk installeret før 2023). Netselskabets indfødningstarif sættes til 0.</label>
   </div>
 
-  <div id="fradragTotalBox" style="margin-top: 8px; padding: 10px 14px; background: var(--bg); border-radius: 6px; font-size: 0.85rem; color: var(--muted);">
-    Samlet fradrag (manuel): <strong id="totalFradrag" style="color: var(--text);">1,62</strong> øre/kWh
+    <div id="fradragTotalBox" style="margin-top: 8px; padding: 10px 14px; background: var(--bg); border-radius: 6px; font-size: 0.85rem; color: var(--muted);">
+      Samlet fradrag (manuel): <strong id="totalFradrag" style="color: var(--text);">1,62</strong> øre/kWh
+    </div>
   </div>
 
-  <h3 style="margin-top: 20px;">Grænseværdier</h3>
+  <h3 style="margin-top: 24px;">Grænseværdier</h3>
   <div class="tariff-grid">
     <div class="field">
       <label>"Dårlig" eksporttime — under denne nettopris<span class="help-icon" tabindex="0" role="img" aria-label="Hjælp" data-tip="En eksporttime markeres 'Dårlig' (rød) når nettoprisen — spot minus alle fradrag — er lavere end denne værdi. Kan sættes negativ for kun at fange timer med negativ pris. Break-even = 0: der er nettoprisen 0, dvs. spotprisen præcis lig med dine samlede fradrag — under det betaler du reelt for at eksportere.">?</span></label>
