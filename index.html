@@ -279,14 +279,14 @@
 
 <!-- Progress steps -->
 <div class="steps" id="stepIndicator">
-  <div class="step active" id="step1"><div class="step-num">1</div> Upload data fra eloverblik</div>
-  <div class="step" id="step2"><div class="step-num">2</div> Konfigurer tariffer</div>
-  <div class="step" id="step3"><div class="step-num">3</div> Se analyse</div>
+  <div class="step active" id="step1"><div class="step-num">1</div> Importér data</div>
+  <div class="step" id="step2"><div class="step-num">2</div> Sæt tariffer (køb + salg)</div>
+  <div class="step" id="step3"><div class="step-num">3</div> Analysér</div>
 </div>
 
 <!-- STEP 1: Upload -->
 <div class="card" id="section-upload">
-  <h2>1. Upload data fra eloverblik.dk</h2>
+  <h2>1. Importér data fra eloverblik.dk</h2>
 
   <details id="guideDetails" style="margin-bottom:18px; background:var(--bg); border:1px solid var(--border); border-radius:8px; overflow:hidden;">
     <summary style="cursor:pointer; padding:12px 16px; font-size:0.9rem; font-weight:600; color:var(--accent); user-select:none; list-style:none; display:flex; align-items:center; gap:8px;">
@@ -342,48 +342,50 @@
   </div>
 </div>
 
-<!-- Quick-konfig via adresse + Strømligning -->
-<div class="card" id="section-quickconfig">
-  <h2>1½. Quick-konfiguration via adresse <span style="color:var(--muted); font-size:0.78rem; font-weight:400">(valgfrit)</span></h2>
-  <p style="margin-bottom:14px">Skriv din adresse, vælg dit netselskab og elaftale — så udfyldes selvforbrugs-overhead automatisk ud fra <a href="https://stromligning.dk" target="_blank" style="color:var(--accent)">Strømligning</a>. Indstillingerne gemmes lokalt i din browser.</p>
-
-  <div class="field" style="margin-bottom:14px; position:relative;">
-    <label>Adresse</label>
-    <input type="text" id="addressInput" placeholder="Begynd at skrive — fx 'Nørrebrogade 1, 2200'" autocomplete="off" style="width:100%; background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:8px 12px; color:var(--text); font-size:0.95rem;">
-    <div id="addressSuggestions" style="display:none; position:absolute; top:100%; left:0; right:0; background:var(--surface); border:1px solid var(--border); border-radius:6px; margin-top:2px; max-height:240px; overflow-y:auto; z-index:50;"></div>
-    <span class="field-unit" id="addressHint" style="margin-top:6px;"></span>
-  </div>
-
-  <div class="tariff-grid" style="margin-bottom:14px;">
-    <div class="field">
-      <label>Netselskab</label>
-      <select id="supplierSelect"><option value="">— vælg adresse først —</option></select>
-      <span class="field-unit" id="supplierHint"></span>
-    </div>
-    <div class="field">
-      <label>Elselskab</label>
-      <select id="companySelect"><option value="">— vælg —</option></select>
-    </div>
-  </div>
-
-  <div class="tariff-grid" style="margin-bottom:14px;">
-    <div class="field">
-      <label>Elaftale</label>
-      <select id="productSelect"><option value="">— vælg elselskab først —</option></select>
-    </div>
-    <div class="field" style="align-self:end;">
-      <button class="btn" id="btnApplyConfig" disabled>Anvend konfiguration</button>
-    </div>
-  </div>
-
-  <div id="quickConfigStatus" style="display:none; font-size:0.83rem; padding:10px 14px; background:rgba(34,197,94,0.08); border:1px solid rgba(34,197,94,0.25); border-radius:6px; color:var(--green);"></div>
-</div>
-
-<!-- STEP 2: Tariff config -->
+<!-- STEP 2: Tariff config (køb + salg) -->
 <div class="card" id="section-config">
-  <h2>2. Konfigurer tariffer og priser</h2>
+  <h2>2. Sæt tariffer — køb og salg</h2>
+
+  <!-- Genvej: udfyld tarifferne automatisk via adresse + Strømligning -->
+  <div id="section-quickconfig" style="margin-bottom:22px; padding:16px 18px; background:var(--bg); border:1px solid var(--border); border-radius:8px;">
+    <h3 style="margin-top:0;">Genvej: udfyld via adresse <span style="color:var(--muted); font-size:0.78rem; font-weight:400">(valgfrit)</span></h3>
+    <p style="margin-bottom:14px">Skriv din adresse, vælg dit netselskab og elaftale — så udfyldes tarifferne (selvforbrugs-overhead og eksport-fradrag) automatisk ud fra <a href="https://stromligning.dk" target="_blank" style="color:var(--accent)">Strømligning</a>. Indstillingerne gemmes lokalt i din browser.</p>
+
+    <div class="field" style="margin-bottom:14px; position:relative;">
+      <label>Adresse</label>
+      <input type="text" id="addressInput" placeholder="Begynd at skrive — fx 'Nørrebrogade 1, 2200'" autocomplete="off" style="width:100%; background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:8px 12px; color:var(--text); font-size:0.95rem;">
+      <div id="addressSuggestions" style="display:none; position:absolute; top:100%; left:0; right:0; background:var(--surface); border:1px solid var(--border); border-radius:6px; margin-top:2px; max-height:240px; overflow-y:auto; z-index:50;"></div>
+      <span class="field-unit" id="addressHint" style="margin-top:6px;"></span>
+    </div>
+
+    <div class="tariff-grid" style="margin-bottom:14px;">
+      <div class="field">
+        <label>Netselskab</label>
+        <select id="supplierSelect"><option value="">— vælg adresse først —</option></select>
+        <span class="field-unit" id="supplierHint"></span>
+      </div>
+      <div class="field">
+        <label>Elselskab</label>
+        <select id="companySelect"><option value="">— vælg —</option></select>
+      </div>
+    </div>
+
+    <div class="tariff-grid" style="margin-bottom:14px;">
+      <div class="field">
+        <label>Elaftale</label>
+        <select id="productSelect"><option value="">— vælg elselskab først —</option></select>
+      </div>
+      <div class="field" style="align-self:end;">
+        <button class="btn" id="btnApplyConfig" disabled>Anvend konfiguration</button>
+      </div>
+    </div>
+
+    <div id="quickConfigStatus" style="display:none; font-size:0.83rem; padding:10px 14px; background:rgba(34,197,94,0.08); border:1px solid rgba(34,197,94,0.25); border-radius:6px; color:var(--green);"></div>
+  </div>
 
   <div id="autoStatusBar" style="display:none; margin-bottom:16px; padding:10px 14px; background:var(--bg); border:1px solid var(--border); border-radius:6px; font-size:0.85rem;"></div>
+
+  <h3 style="margin-top:0;">Køb — når du selvforbruger</h3>
 
   <div class="row" style="margin-bottom:16px; gap:20px;">
     <div class="field">
@@ -407,7 +409,7 @@
     <div id="overheadBreakdown" style="padding:0 14px 14px;"></div>
   </details>
 
-  <h3>Fradrag på eksportpris <span id="fradragMode" style="font-size:0.7rem; font-weight:500; padding:2px 9px; border-radius:10px; vertical-align:middle; margin-left:6px;"></span></h3>
+  <h3>Salg — fradrag på eksportprisen <span id="fradragMode" style="font-size:0.7rem; font-weight:500; padding:2px 9px; border-radius:10px; vertical-align:middle; margin-left:6px;"></span></h3>
 
   <!-- Per-time EDS: automatiske, read-only fradrag (vises når netselskab har EDS-data) -->
   <div id="fradragEds" style="display:none; margin-bottom:12px; padding:10px 14px; background:var(--bg); border:1px solid var(--border); border-radius:6px; font-size:0.85rem;">
