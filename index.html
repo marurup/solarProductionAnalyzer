@@ -453,7 +453,7 @@
     <label>Vælg elhandler (produktionsaftager)<span class="help-icon" tabindex="0" role="img" aria-label="Hjælp" data-tip="Vælg din elhandler for at udfylde spread/gebyret (feltet nedenfor) automatisk — eller vælg 'Indtast selv' og skriv beløbet. Listen dækker kun elhandlernes eget spread/gebyr, ikke de regulerede tariffer (dem henter appen fra EDS). Listen er manuelt vedligeholdt og kan være forældet.">?</span></label>
     <select id="aftagerSelect"><option value="">— Indtast selv —</option></select>
     <span class="field-unit" id="aftagerNote" style="margin-top:4px;"></span>
-    <span class="field-unit" style="margin-top:2px; color:var(--muted);">⚠ Listen er manuelt vedligeholdt og kan være forældet — verificér altid mod din egen afregning.</span>
+    <span class="field-unit" id="aftagerDisclaimer" style="margin-top:2px; color:var(--muted);">⚠ Listen er manuelt vedligeholdt og kan være forældet — verificér altid mod din egen afregning.</span>
   </div>
 
   <!-- Leverandørgebyr: altid synligt — findes IKKE i EDS (kommercielt vilkår) -->
@@ -2494,43 +2494,52 @@ document.getElementById('t4').addEventListener('input', () => { updateExportDedu
 document.getElementById('aftagepligt').addEventListener('change', () => { updateTotalFradrag(); updateExportDeductionUI(); refreshOverheadIfVisible(); });
 updateExportDeductionUI();
 
-// ==PRODUKTIONSAFTAGERE_START==
-// Manuelt vedligeholdt liste over elhandlere der køber overskudsstrøm, med deres
-// spread/gebyr på produktionen i øre/kWh (= t4 — det elhandleren beholder OVEN i de
-// regulerede tariffer, som appen selv henter fra EDS). Kun tal vi kan sætte kilde på —
-// verificér mod din egen afregning før du stoler på dem. Tilføj nye poster her.
-const PRODUKTIONSAFTAGERE = [
-  { navn: 'Vindstød — Variabel timepris',            spread: 1.0,  note: 'Fast spread: afregnes til spot − 1 øre/kWh.',                 kilde: 'egen afregning, verificeret 20 mdr', opdateret: '2026-07' },
-  { navn: 'Norlys — som Norlys-elkunde',             spread: 0,    note: '0 øre tillæg når du også er elkunde hos Norlys på samme adresse.', kilde: 'norlys.dk',                          opdateret: '2026-08' },
-  { navn: 'Norlys — kunde hos andet elselskab',      spread: 0.80, note: '0,80 øre/kWh tillæg hvis du ikke er Norlys-elkunde.',           kilde: 'norlys.dk',                          opdateret: '2026-08' },
-];
-// ==PRODUKTIONSAFTAGERE_END==
-
-(function initAftagerDropdown() {
+// Produktionsaftagere: manuelt vedligeholdt liste i data/produktionsaftagere.json.
+// Valg udfylder t4 (elhandlerens spread/gebyr på produktionen, oven i de regulerede
+// tariffer appen selv henter fra EDS). Se datafilen for kilder + links.
+(async function initAftagerDropdown() {
   const sel = document.getElementById('aftagerSelect');
   const note = document.getElementById('aftagerNote');
+  const disc = document.getElementById('aftagerDisclaimer');
   const t4 = document.getElementById('t4');
   if (!sel || !note || !t4) return;
 
-  const DISCLAIMER = '';
-  PRODUKTIONSAFTAGERE.forEach((a, i) => {
+  let liste = [];
+  try {
+    const resp = await fetch('data/produktionsaftagere.json', { cache: 'no-cache' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    liste = Array.isArray(data.aftagere) ? data.aftagere : [];
+    if (disc && data.opdateret) {
+      disc.textContent = `⚠ Manuelt vedligeholdt liste (sidst opdateret ${data.opdateret}) — vilkår ændres. Verificér altid via linket og din egen afregning.`;
+    }
+  } catch (e) {
+    if (disc) disc.textContent = '⚠ Kunne ikke indlæse elhandler-listen — indtast gebyret manuelt nedenfor.';
+    return; // dropdown forbliver kun "Indtast selv"
+  }
+
+  liste.forEach((a, i) => {
     const o = document.createElement('option');
     o.value = String(i);
-    o.textContent = `${a.navn} — ${a.spread.toLocaleString('da-DK')} øre/kWh`;
+    const pris = a.spread == null ? 'se link' : `${Number(a.spread).toLocaleString('da-DK')} øre/kWh`;
+    o.textContent = `${a.navn} — ${pris}`;
     sel.appendChild(o);
   });
 
-  function showNote(a) {
-    note.innerHTML = a
-      ? `${a.note} <span style="color:var(--muted)">(kilde: ${a.kilde}, opdateret ${a.opdateret})</span>`
-      : DISCLAIMER;
-  }
+  const selected = () => (sel.value === '' ? null : liste[+sel.value]);
 
-  const selected = () => (sel.value === '' ? null : PRODUKTIONSAFTAGERE[+sel.value]);
+  function showNote(a) {
+    if (!a) { note.innerHTML = ''; return; }
+    const bits = [];
+    if (a.kilde) bits.push(`kilde: ${a.kilde}`);
+    if (a.url) bits.push(`<a href="${a.url}" target="_blank" rel="noopener" style="color:var(--accent)">se aktuel pris ↗</a>`);
+    if (a.opdateret) bits.push(`tjekket ${a.opdateret}`);
+    note.innerHTML = `${a.note || ''} <span style="color:var(--muted)">· ${bits.join(' · ')}</span>`;
+  }
 
   sel.addEventListener('change', () => {
     const a = selected();
-    if (a) {
+    if (a && a.spread != null) {
       t4.value = a.spread;
       t4.dispatchEvent(new Event('input', { bubbles: true }));
     }
@@ -2540,10 +2549,8 @@ const PRODUKTIONSAFTAGERE = [
   // Manuel redigering af t4 nulstiller valget til "Indtast selv".
   t4.addEventListener('input', () => {
     const a = selected();
-    if (a && +t4.value !== a.spread) { sel.value = ''; showNote(null); }
+    if (a && a.spread != null && +t4.value !== Number(a.spread)) { sel.value = ''; showNote(null); }
   });
-
-  showNote(null);
 })();
 
 // Break-even: spotprisen hvor netto = 0 = dine samlede fradrag i dag (øre/kWh inkl. moms + t4).

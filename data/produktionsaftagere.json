@@ -1,0 +1,70 @@
+{
+  "_kommentar": "Manuelt vedligeholdt liste over elhandlere der koeber overskudsstroem fra solceller. 'spread' = elhandlerens EGET gebyr/tillaeg paa produktionen i oere/kWh (= t4-feltet i appen) — det de beholder OVEN i de regulerede tariffer (Energinet + netselskab), som appen selv henter fra EDS. Saet 'spread' til null hvis gebyret ikke er bekraeftet (saa udfyldes t4 ikke, men link + note vises). Ret 'opdateret' (dato) baade globalt og pr. post naar tal verificeres. Verificér altid mod en faktisk afregning.",
+  "opdateret": "2026-08-02",
+  "aftagere": [
+    {
+      "navn": "Vindstød — Variabel timepris",
+      "spread": 1.0,
+      "note": "Fast spread: afregnes til spot − 1 øre/kWh.",
+      "kilde": "egen afregning (verificeret 20 mdr)",
+      "url": "https://www.vindstoed.dk/tilmelding-solcelle",
+      "opdateret": "2026-07"
+    },
+    {
+      "navn": "Norlys — som Norlys-elkunde",
+      "spread": 0,
+      "note": "0 øre tillæg når du også er elkunde hos Norlys på samme adresse.",
+      "kilde": "norlys.dk",
+      "url": "https://norlys.dk/solceller/overskudsstroem/",
+      "opdateret": "2026-08"
+    },
+    {
+      "navn": "Norlys — kunde hos andet elselskab",
+      "spread": 0.80,
+      "note": "0,80 øre/kWh tillæg hvis du ikke er Norlys-elkunde.",
+      "kilde": "norlys.dk",
+      "url": "https://norlys.dk/solceller/overskudsstroem/",
+      "opdateret": "2026-08"
+    },
+    {
+      "navn": "Modstrøm — som Modstrøm-elkunde",
+      "spread": 0,
+      "note": "Intet tillæg pr. kWh og 0 kr/md abonnement når du har elaftale hos Modstrøm.",
+      "kilde": "modstroem.dk",
+      "url": "https://www.modstroem.dk/solceller/salg-af-stroem-fra-solceller/",
+      "opdateret": "2026-08"
+    },
+    {
+      "navn": "Modstrøm — kun produktionskunde",
+      "spread": 5.0,
+      "note": "5 øre/kWh tillæg + 10 kr/md abonnement hvis du ikke har elaftale hos Modstrøm.",
+      "kilde": "modstroem.dk",
+      "url": "https://www.modstroem.dk/solceller/salg-af-stroem-fra-solceller/",
+      "opdateret": "2026-08"
+    },
+    {
+      "navn": "Andel Energi",
+      "spread": 3.0,
+      "note": "Andels egen balancetarif 3 øre/kWh. Abonnement 0 kr/md som elkunde (ellers 20 kr/md).",
+      "kilde": "andelenergi.dk",
+      "url": "https://andelenergi.dk/solceller/tilmeld-produktionsaftale/",
+      "opdateret": "2026-08"
+    },
+    {
+      "navn": "SEF Energi",
+      "spread": 3.75,
+      "note": "SEFs egen balancetarif 3,75 øre/kWh. Abonnement 0 kr/md som elkunde (ellers 29 kr/md).",
+      "kilde": "sefenergi.dk",
+      "url": "https://sefenergi.dk/produktionsaftale/",
+      "opdateret": "2026-08"
+    },
+    {
+      "navn": "NRGi",
+      "spread": 4.0,
+      "note": "Handelstillæg 4 øre/kWh (ekskl. moms) + en balanceomkostning (~1,9 øre/kWh) — se linket for fuld model. Abonnement 0 kr/md som elkunde (ellers 29 kr/md).",
+      "kilde": "nrgi.dk",
+      "url": "https://nrgi.dk/privat/stroem/solceller/salg-af-solcellestroem/",
+      "opdateret": "2026-08"
+    }
+  ]
+}
