@@ -2518,14 +2518,22 @@ updateExportDeductionUI();
     return; // dropdown forbliver kun "Indtast selv"
   }
 
+  const grpAlene   = document.createElement('optgroup');
+  const grpElkunde = document.createElement('optgroup');
+  grpAlene.label   = 'Produktionsaftale alene — uanset elselskab';
+  grpElkunde.label = 'Kræver/forudsætter elkunde hos selskabet';
+
   liste.forEach((a, i) => {
     const o = document.createElement('option');
     o.value = String(i);
     const pris = a.spread == null ? 'se link' : `${Number(a.spread).toLocaleString('da-DK')} øre/kWh`;
     const abon = a.abonnement == null ? '' : ` · ${a.abonnement === 0 ? 'gratis abonnement' : a.abonnement + ' kr/md'}`;
     o.textContent = `${a.navn} — ${pris}${abon}`;
-    sel.appendChild(o);
+    (a.kategori === 'elkunde' ? grpElkunde : grpAlene).appendChild(o);
   });
+
+  if (grpAlene.children.length)   sel.appendChild(grpAlene);
+  if (grpElkunde.children.length) sel.appendChild(grpElkunde);
 
   const selected = () => (sel.value === '' ? null : liste[+sel.value]);
 

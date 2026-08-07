@@ -390,7 +390,7 @@ async function loadAftagerStats() {
     const data = await resp.json();
     const liste = Array.isArray(data.aftagere) ? data.aftagere : [];
 
-    const rows = liste.map(a => {
+    const renderRow = a => {
       const spread = a.spread == null
         ? `<span style="color:var(--muted); font-style:italic">ubekræftet</span>`
         : `<strong>${Number(a.spread).toLocaleString('da-DK')} øre/kWh</strong>`;
@@ -409,23 +409,30 @@ async function loadAftagerStats() {
         <td style="padding:7px 12px; font-size:0.82rem; color:var(--muted);">${a.note || ''}</td>
         <td style="padding:7px 0; font-size:0.82rem; white-space:nowrap;">${link}</td>
       </tr>`;
-    }).join('');
+    };
+
+    const thead = `<thead><tr style="border-bottom:1px solid var(--border); color:var(--muted); font-size:0.75rem; text-transform:uppercase;">
+      <th style="text-align:left; padding:4px 12px 8px 0; font-weight:normal;">Selskab</th>
+      <th style="text-align:left; padding:4px 12px 8px; font-weight:normal;">Spread</th>
+      <th style="text-align:left; padding:4px 12px 8px; font-weight:normal;">Abonnement</th>
+      <th style="text-align:left; padding:4px 12px 8px; font-weight:normal;">Note</th>
+      <th style="text-align:left; padding:4px 0 8px; font-weight:normal;">Kilde</th>
+    </tr></thead>`;
+
+    const renderGroup = (poster, label) => poster.length ? `
+      <h3 style="margin:16px 0 8px;">${label}</h3>
+      <table style="width:100%; font-size:0.85rem; border-collapse:collapse;">${thead}
+        <tbody>${poster.map(renderRow).join('')}</tbody>
+      </table>` : '';
+
+    const alene   = liste.filter(a => a.kategori !== 'elkunde');
+    const elkunde = liste.filter(a => a.kategori === 'elkunde');
 
     el.innerHTML = `
-      <p style="font-size:0.8rem; margin-bottom:10px;">Sidst opdateret: ${data.opdateret || '—'} &nbsp;·&nbsp; ${liste.length} aftagere</p>
+      <p style="font-size:0.8rem; margin-bottom:4px;">Sidst opdateret: ${data.opdateret || '—'} &nbsp;·&nbsp; ${liste.length} aftagere</p>
       <div style="overflow-x:auto;">
-        <table style="width:100%; font-size:0.85rem; border-collapse:collapse;">
-          <thead>
-            <tr style="border-bottom:1px solid var(--border); color:var(--muted); font-size:0.75rem; text-transform:uppercase;">
-              <th style="text-align:left; padding:4px 12px 8px 0; font-weight:normal;">Selskab</th>
-              <th style="text-align:left; padding:4px 12px 8px; font-weight:normal;">Spread</th>
-              <th style="text-align:left; padding:4px 12px 8px; font-weight:normal;">Abonnement</th>
-              <th style="text-align:left; padding:4px 12px 8px; font-weight:normal;">Note</th>
-              <th style="text-align:left; padding:4px 0 8px; font-weight:normal;">Kilde</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
+        ${renderGroup(alene,   'Produktionsaftale alene — uanset elselskab')}
+        ${renderGroup(elkunde, 'Kræver/forudsætter elkunde hos selskabet')}
       </div>`;
   } catch (e) {
     el.innerHTML = `<div class="empty">Kunne ikke indlæse aftagerlisten: ${e.message}</div>`;

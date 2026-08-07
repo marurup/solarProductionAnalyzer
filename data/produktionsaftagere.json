@@ -1,54 +1,120 @@
 {
-  "_kommentar": "Manuelt vedligeholdt liste over elhandlere der koeber overskudsstroem fra solceller. 'spread' = elhandlerens EGET gebyr/tillaeg paa produktionen i oere/kWh (= t4-feltet i appen). 'abonnement' = fast maanedlig pris i kr/md (0 = gratis, null = ukendt). Saet 'spread' til null hvis gebyret ikke er bekraeftet (saa udfyldes t4 ikke). Ret 'opdateret' (dato) baade globalt og pr. post naar tal verificeres.",
+  "_kommentar": "Manuelt vedligeholdt liste over elhandlere der koeber overskudsstroem fra solceller. 'spread' = elhandlerens EGET gebyr/tillaeg paa produktionen i oere/kWh (= t4-feltet i appen). 'abonnement' = fast maanedlig pris i kr/md (0 = gratis, null = ukendt). 'kategori' = 'alene' (kan tegnes uanset elselskab) eller 'elkunde' (kraever/forudsaetter elkunde-relation hos selskabet). Saet 'spread' til null hvis gebyret ikke er bekraeftet. Ret 'opdateret' baade globalt og pr. post naar tal verificeres.",
   "opdateret": "2026-08-07",
   "aftagere": [
     {
-      "navn": "Vindstød — Variabel timepris",
+      "navn": "Vindstød",
+      "kategori": "alene",
       "spread": 1.0,
       "abonnement": 0,
-      "note": "Fast spread: afregnes til spot − 1 øre/kWh.",
+      "note": "Variabel timepris-aftale. Afregnes til spot − 1 øre/kWh. Ingen krav om elkunde.",
       "kilde": "egen afregning (verificeret 20 mdr)",
       "url": "https://www.vindstoed.dk/tilmelding-solcelle",
       "opdateret": "2026-07"
     },
     {
-      "navn": "Norlys — som Norlys-elkunde",
-      "spread": 0,
-      "abonnement": 0,
-      "note": "Intet tillæg og gratis abonnement når du også er elkunde hos Norlys på samme adresse.",
-      "kilde": "norlys.dk",
-      "url": "https://norlys.dk/solceller/overskudsstroem/",
-      "opdateret": "2026-08"
-    },
-    {
-      "navn": "Norlys — kun produktionskunde",
+      "navn": "Norlys",
+      "kategori": "alene",
       "spread": 0.80,
       "abonnement": 29,
-      "note": "0,80 øre/kWh tillæg + 29 kr/md abonnement hvis du ikke er Norlys-elkunde.",
+      "note": "0,80 øre/kWh + 29 kr/md abonnement som ren produktionskunde (ikke Norlys-elkunde).",
       "kilde": "norlys.dk",
       "url": "https://norlys.dk/solceller/overskudsstroem/",
       "opdateret": "2026-08"
     },
     {
-      "navn": "Modstrøm — som Modstrøm-elkunde",
-      "spread": 0,
-      "abonnement": 0,
-      "note": "Intet tillæg og gratis abonnement når du har elaftale hos Modstrøm.",
-      "kilde": "modstroem.dk",
-      "url": "https://www.modstroem.dk/solceller/salg-af-stroem-fra-solceller/",
-      "opdateret": "2026-08"
-    },
-    {
-      "navn": "Modstrøm — kun produktionskunde",
+      "navn": "Modstrøm",
+      "kategori": "alene",
       "spread": 5.0,
       "abonnement": 10,
-      "note": "5 øre/kWh tillæg + 10 kr/md abonnement hvis du ikke har elaftale hos Modstrøm.",
+      "note": "5 øre/kWh + 10 kr/md abonnement som ren produktionskunde (ikke Modstrøm-elkunde).",
       "kilde": "modstroem.dk",
       "url": "https://www.modstroem.dk/solceller/salg-af-stroem-fra-solceller/",
       "opdateret": "2026-08"
     },
     {
-      "navn": "Andel Energi — som Andel-elkunde",
+      "navn": "Andel Energi",
+      "kategori": "alene",
+      "spread": 3.0,
+      "abonnement": 20,
+      "note": "Andels balancetarif 3 øre/kWh + 20 kr/md abonnement som ren produktionskunde (ikke Andel-elkunde).",
+      "kilde": "andelenergi.dk",
+      "url": "https://andelenergi.dk/solceller/tilmeld-produktionsaftale/",
+      "opdateret": "2026-08"
+    },
+    {
+      "navn": "SEF Energi",
+      "kategori": "alene",
+      "spread": 3.75,
+      "abonnement": 29,
+      "note": "SEFs balancetarif 3,75 øre/kWh + 29 kr/md abonnement som ren produktionskunde (ikke SEF-elkunde).",
+      "kilde": "sefenergi.dk",
+      "url": "https://sefenergi.dk/produktionsaftale/",
+      "opdateret": "2026-08"
+    },
+    {
+      "navn": "NRGi",
+      "kategori": "alene",
+      "spread": 4.0,
+      "abonnement": 29,
+      "note": "Handelstillæg 4 øre/kWh (ekskl. moms) + balanceomkostning (~1,9 øre/kWh) + 29 kr/md abonnement som ren produktionskunde (ikke NRGi-elkunde).",
+      "kilde": "nrgi.dk",
+      "url": "https://nrgi.dk/privat/stroem/solceller/salg-af-solcellestroem/",
+      "opdateret": "2026-08"
+    },
+    {
+      "navn": "Green Power Energy",
+      "kategori": "alene",
+      "spread": 1.0,
+      "abonnement": 19,
+      "note": "1 øre/kWh balancetillæg + 19 kr/md abonnement som ren produktionskunde (ikke GPE-elkunde).",
+      "kilde": "greenpowerenergy.dk",
+      "url": "https://greenpowerenergy.dk",
+      "opdateret": "2026-08"
+    },
+    {
+      "navn": "Jysk Energi",
+      "kategori": "alene",
+      "spread": 2.5,
+      "abonnement": 45,
+      "note": "Fradrag 2,5 øre/kWh + 45 kr/md abonnement som ren produktionskunde (eller 39 kr/kvartal). Ikke Jysk-elkunde.",
+      "kilde": "jyskenergi.dk",
+      "url": "https://jyskenergi.dk/je-product/min-stroem/",
+      "opdateret": "2026-08"
+    },
+    {
+      "navn": "nef Strøm",
+      "kategori": "alene",
+      "spread": 2.5,
+      "abonnement": 25,
+      "note": "Handelsomkostninger 2,5 øre/kWh (momsfrit) + 25 kr/md abonnement som ren produktionskunde (ikke nef-elkunde).",
+      "kilde": "nef.dk",
+      "url": "https://nef.dk/privat/saelg-stroem/",
+      "opdateret": "2026-08"
+    },
+    {
+      "navn": "Norlys",
+      "kategori": "elkunde",
+      "spread": 0,
+      "abonnement": 0,
+      "note": "Intet tillæg og gratis abonnement som Norlys-elkunde på samme adresse.",
+      "kilde": "norlys.dk",
+      "url": "https://norlys.dk/solceller/overskudsstroem/",
+      "opdateret": "2026-08"
+    },
+    {
+      "navn": "Modstrøm",
+      "kategori": "elkunde",
+      "spread": 0,
+      "abonnement": 0,
+      "note": "Intet tillæg og gratis abonnement som Modstrøm-elkunde.",
+      "kilde": "modstroem.dk",
+      "url": "https://www.modstroem.dk/solceller/salg-af-stroem-fra-solceller/",
+      "opdateret": "2026-08"
+    },
+    {
+      "navn": "Andel Energi",
+      "kategori": "elkunde",
       "spread": 3.0,
       "abonnement": 0,
       "note": "Andels balancetarif 3 øre/kWh. Gratis abonnement som Andel-elkunde.",
@@ -57,16 +123,8 @@
       "opdateret": "2026-08"
     },
     {
-      "navn": "Andel Energi — kun produktionskunde",
-      "spread": 3.0,
-      "abonnement": 20,
-      "note": "Andels balancetarif 3 øre/kWh + 20 kr/md abonnement hvis du ikke er Andel-elkunde.",
-      "kilde": "andelenergi.dk",
-      "url": "https://andelenergi.dk/solceller/tilmeld-produktionsaftale/",
-      "opdateret": "2026-08"
-    },
-    {
-      "navn": "SEF Energi — som SEF-elkunde",
+      "navn": "SEF Energi",
+      "kategori": "elkunde",
       "spread": 3.75,
       "abonnement": 0,
       "note": "SEFs balancetarif 3,75 øre/kWh. Gratis abonnement som SEF-elkunde.",
@@ -75,16 +133,8 @@
       "opdateret": "2026-08"
     },
     {
-      "navn": "SEF Energi — kun produktionskunde",
-      "spread": 3.75,
-      "abonnement": 29,
-      "note": "SEFs balancetarif 3,75 øre/kWh + 29 kr/md abonnement hvis du ikke er SEF-elkunde.",
-      "kilde": "sefenergi.dk",
-      "url": "https://sefenergi.dk/produktionsaftale/",
-      "opdateret": "2026-08"
-    },
-    {
-      "navn": "NRGi — som NRGi-elkunde",
+      "navn": "NRGi",
+      "kategori": "elkunde",
       "spread": 4.0,
       "abonnement": 0,
       "note": "Handelstillæg 4 øre/kWh (ekskl. moms) + balanceomkostning (~1,9 øre/kWh). Gratis abonnement som NRGi-elkunde.",
@@ -93,52 +143,38 @@
       "opdateret": "2026-08"
     },
     {
-      "navn": "NRGi — kun produktionskunde",
-      "spread": 4.0,
-      "abonnement": 29,
-      "note": "Handelstillæg 4 øre/kWh (ekskl. moms) + balanceomkostning (~1,9 øre/kWh) + 29 kr/md abonnement.",
-      "kilde": "nrgi.dk",
-      "url": "https://nrgi.dk/privat/stroem/solceller/salg-af-solcellestroem/",
-      "opdateret": "2026-08"
-    },
-    {
-      "navn": "Green Power Energy — som GPE-elkunde",
+      "navn": "Green Power Energy",
+      "kategori": "elkunde",
       "spread": 0,
       "abonnement": 0,
-      "note": "Ingen balancetillæg og gratis abonnement som GPE-elkunde (kombineret køb + salg). Verificér mod din afregning — ikke bekræftet med faktiske afregninger.",
+      "note": "Ingen balancetillæg og gratis abonnement som GPE-elkunde (kombineret køb + salg). Verificér mod din afregning.",
       "kilde": "greenpowerenergy.dk",
       "url": "https://greenpowerenergy.dk",
       "opdateret": "2026-08"
     },
     {
-      "navn": "Green Power Energy — kun produktionskunde",
-      "spread": 1.0,
-      "abonnement": 19,
-      "note": "1 øre/kWh balancetillæg + 19 kr/md abonnement som ren produktionskunde (ingen GPE-elaftale).",
-      "kilde": "greenpowerenergy.dk",
-      "url": "https://greenpowerenergy.dk",
-      "opdateret": "2026-08"
-    },
-    {
-      "navn": "Jysk Energi — som Jysk-elkunde",
+      "navn": "Jysk Energi",
+      "kategori": "elkunde",
       "spread": 2.5,
       "abonnement": 0,
-      "note": "Fradrag 2,5 øre/kWh. Produktionsabonnement gratis som Jysk Energi-elkunde (forbrugsabonnement 25 kr/md faktureres separat).",
+      "note": "Fradrag 2,5 øre/kWh. Produktionsabonnement gratis som Jysk-elkunde (forbrugsabonnement 25 kr/md faktureres separat).",
       "kilde": "jyskenergi.dk",
       "url": "https://jyskenergi.dk/je-product/min-stroem/",
       "opdateret": "2026-08"
     },
     {
-      "navn": "Jysk Energi — kun produktionskunde",
+      "navn": "nef Strøm",
+      "kategori": "elkunde",
       "spread": 2.5,
-      "abonnement": 45,
-      "note": "Fradrag 2,5 øre/kWh + 45 kr/md abonnement (eller 39 kr/kvartal ved kvartalsafregning).",
-      "kilde": "jyskenergi.dk",
-      "url": "https://jyskenergi.dk/je-product/min-stroem/",
+      "abonnement": 0,
+      "note": "Handelsomkostninger 2,5 øre/kWh (momsfrit). Gratis abonnement som nef-elkunde.",
+      "kilde": "nef.dk",
+      "url": "https://nef.dk/privat/saelg-stroem/",
       "opdateret": "2026-08"
     },
     {
       "navn": "Energy Nordic",
+      "kategori": "elkunde",
       "spread": 3.0,
       "abonnement": 8,
       "note": "Håndteringsgebyr 3 øre/kWh + 8 kr/md abonnement. Kræver tilmelding som forbrugskunde hos Energy Nordic.",
@@ -148,33 +184,17 @@
     },
     {
       "navn": "Energi Fyn",
+      "kategori": "elkunde",
       "spread": 3.75,
       "abonnement": 15,
-      "note": "Handels- og administrationsomkostninger 3,75 øre/kWh inkl. moms + 15 kr/md samlet abonnement for el- og produktionsaftale. Kræver elkunde hos Energi Fyn (inden for 6 mdr.). Andet selskab end SEF Energi.",
+      "note": "Handels- og administrationsomkostninger 3,75 øre/kWh inkl. moms + 15 kr/md samlet abonnement. Kræver elkunde hos Energi Fyn (inden for 6 mdr.). Andet selskab end SEF Energi.",
       "kilde": "energifyn.dk",
       "url": "https://www.energifyn.dk/privat/el/salg-af-overskudsproduktion/",
       "opdateret": "2026-08"
     },
     {
-      "navn": "nef Strøm — som nef-elkunde",
-      "spread": 2.5,
-      "abonnement": 0,
-      "note": "Handelsomkostninger 2,5 øre/kWh (momsfrit). Gratis abonnement som nef-elkunde.",
-      "kilde": "nef.dk",
-      "url": "https://nef.dk/privat/saelg-stroem/",
-      "opdateret": "2026-08"
-    },
-    {
-      "navn": "nef Strøm — kun produktionskunde",
-      "spread": 2.5,
-      "abonnement": 25,
-      "note": "Handelsomkostninger 2,5 øre/kWh (momsfrit) + 25 kr/md abonnement hvis du ikke er nef-elkunde.",
-      "kilde": "nef.dk",
-      "url": "https://nef.dk/privat/saelg-stroem/",
-      "opdateret": "2026-08"
-    },
-    {
       "navn": "Nordisk Energi",
+      "kategori": "elkunde",
       "spread": 0,
       "abonnement": 0,
       "note": "Intet pristillæg og gratis abonnement. Kræver tilmelding som forbrugskunde hos Nordisk Energi.",
