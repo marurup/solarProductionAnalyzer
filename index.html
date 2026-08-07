@@ -202,6 +202,7 @@
     tr:last-child td { border-bottom: none; }
     tr.bad td:first-child { border-left: 3px solid var(--red); }
     tr.warn td:first-child { border-left: 3px solid var(--accent); }
+    tr.good td:first-child { border-left: 3px solid var(--green); }
     .badge {
       display: inline-block; padding: 2px 8px; border-radius: 4px;
       font-size: 0.75rem; font-weight: 600;
@@ -209,6 +210,16 @@
     .badge.red { background: rgba(239,68,68,0.15); color: var(--red); }
     .badge.amber { background: rgba(245,158,11,0.15); color: var(--accent); }
     .badge.green { background: rgba(34,197,94,0.15); color: var(--green); }
+
+    /* Oversigt: månedlig søjlegraf */
+    .chart-bars { display: flex; gap: 5px; align-items: flex-end; min-height: 80px; overflow-x: auto; padding-bottom: 2px; }
+    .chart-bar-wrap { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 32px; flex: 1; max-width: 64px; }
+    .chart-bar { width: 100%; border-radius: 3px 3px 0 0; min-height: 2px; }
+    .chart-bar-label { font-size: 0.62rem; color: var(--muted); text-align: center; line-height: 1.3; }
+    .chart-bar-val { font-size: 0.65rem; text-align: center; font-weight: 600; line-height: 1.3; }
+    /* Oversigt: timer-fordeling */
+    .dist-bar { display: flex; border-radius: 4px; overflow: hidden; height: 18px; margin: 6px 0; background: var(--border); }
+    .dist-segment { height: 100%; }
 
     /* Debug log */
     .debug-log {
@@ -519,13 +530,45 @@
 
   <div class="card">
     <div class="tabs">
-      <div class="tab active" data-tab="bad">Problematiske timer</div>
+      <div class="tab active" data-tab="overview">Oversigt</div>
+      <div class="tab" data-tab="bad">Problematiske timer</div>
       <div class="tab" data-tab="monthly">Månedsoversigt</div>
       <div class="tab" data-tab="revenue">Afregnings-validering</div>
       <div class="tab" data-tab="bill">Elforbrug-validering</div>
     </div>
 
-    <div class="tab-content active" id="tab-bad">
+    <div class="tab-content active" id="tab-overview">
+      <div style="margin-bottom:24px">
+        <h3 style="margin-bottom:10px">Månedlig eksport-indkomst</h3>
+        <div class="chart-bars" id="overviewChart"></div>
+      </div>
+      <div style="margin-bottom:24px">
+        <h3 style="margin-bottom:6px">Fordeling af eksportimer</h3>
+        <div class="dist-bar" id="overviewDist"></div>
+        <div id="overviewDistLegend" style="font-size:0.78rem; color:var(--muted)"></div>
+      </div>
+      <div class="row" style="margin-bottom:10px">
+        <h3>Alle eksportimer</h3>
+        <div class="spacer"></div>
+        <button class="btn btn-secondary" id="btnExportCSVOverview" style="font-size:0.82rem; padding:6px 14px;">Eksporter CSV</button>
+      </div>
+      <div class="table-wrap">
+        <table id="overviewTable">
+          <thead>
+            <tr>
+              <th class="th-static">Dato/tid</th>
+              <th class="th-static">kWh eksporteret</th>
+              <th class="th-static">Spotpris (øre)</th>
+              <th class="th-static">Netto eksport (øre)</th>
+              <th class="th-static">Status</th>
+            </tr>
+          </thead>
+          <tbody id="overviewBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="tab-content" id="tab-bad">
       <div class="row" style="margin-bottom: 12px;">
         <span style="font-size:0.85rem; color:var(--muted)">
           Timer med netto eksportpris under grænseværdien og eksport over minimum.
@@ -541,9 +584,7 @@
           <p style="margin:8px 0;"><strong style="color:var(--text)">kWh eksporteret</strong> — mængde strøm leveret til nettet i timen (D06 fra din eloverblik-CSV).</p>
           <p style="margin:8px 0;"><strong style="color:var(--text)">Spotpris (øre)</strong> — rå spotpris (Nord Pool via Energi Data Service) for timen, i øre/kWh <em>uden moms</em>. Grundlag for alle øvrige beregninger.</p>
           <p style="margin:8px 0;"><strong style="color:var(--text)">Netto eksport (øre)</strong> — hvad du reelt får for at sælge 1 kWh: <code>spotpris − produktionsfradrag</code>. Fradragene er Energinets balance- og indfødningstarif, netselskabets indfødningstarif og leverandørgebyr. Kan være negativ.</p>
-          <p style="margin:8px 0;"><strong style="color:var(--text)">Selvforbrugsværdi (øre)</strong> — hvad 1 kWh ville være værd hvis du brugte den selv i stedet — altså den sparede detailpris: <code>spot × 1,25 + forbrugstariffer × 1,25</code> (nettarif, elafgift, leverandørtillæg og Energinet-tariffer, inkl. moms).</p>
-          <p style="margin:8px 0;"><strong style="color:var(--text)">Tabt (kr)</strong> — tabt fortjeneste for timen: <code>(selvforbrugsværdi − netto eksport) × kWh ÷ 100</code>. Altså hvad du gik glip af ved at sælge frem for at bruge eller lagre strømmen. Vises kun når den er positiv.</p>
-          <p style="margin:8px 0;"><strong style="color:var(--text)">Status</strong> — markering ud fra netto eksportpris: <span class="badge red">Negativ pris</span> (under 0), <span class="badge red">Dårlig</span> (under din Dårlig-grænse), <span class="badge amber">Lav pris</span> (mellem Dårlig- og Advarsel-grænsen).</p>
+          <p style="margin:8px 0;"><strong style="color:var(--text)">Status</strong> — markering ud fra netto eksportpris: <span class="badge red">Negativ pris</span> (under 0 — du betalte reelt for at eksportere), <span class="badge red">Dårlig</span> (under din Dårlig-grænse), <span class="badge amber">Lav pris</span> (mellem Dårlig- og Advarsel-grænsen).</p>
           <p style="margin:10px 0 4px; font-size:0.82rem;">Er per-time tarif-data ikke aktivt (netselskab uden historik), bruges i stedet de manuelle felter i trin 2 — fradrag <code>t1–t4</code> og <code>tariff-overhead</code>.</p>
         </div>
       </details>
@@ -556,8 +597,7 @@
               <th data-col="kwh" onclick="sortTable('kwh')">kWh eksporteret<span class="sort-ind"></span></th>
               <th data-col="spotOere" onclick="sortTable('spotOere')">Spotpris (øre)<span class="sort-ind"></span></th>
               <th data-col="nettoEksportOere" onclick="sortTable('nettoEksportOere')">Netto eksport (øre)<span class="sort-ind"></span></th>
-              <th data-col="selvforbrugVaerdi" onclick="sortTable('selvforbrugVaerdi')">Selvforbrugsværdi (øre)<span class="sort-ind"></span></th>
-              <th data-col="tabtFortjenesteDKK" onclick="sortTable('tabtFortjenesteDKK')">Tabt (kr)<span class="sort-ind"></span></th>
+
               <th class="th-static">Status</th>
             </tr>
           </thead>
@@ -575,8 +615,8 @@
               <th>kWh eksporteret</th>
               <th>Indtægt (kr)</th>
               <th>Gns. netto-pris (øre/kWh)</th>
+              <th>Timer m. negativ pris</th>
               <th>Dårlige timer</th>
-              <th>Tabt fortjeneste (kr)</th>
             </tr>
           </thead>
           <tbody id="monthlyBody"></tbody>
@@ -803,9 +843,10 @@ const state = {
   analysisData: null, // full analysis result array
   revenueMonths: null,     // Map<string, monthly aggregation> for revenue validation
   consumptionMonths: null, // Map<string, monthly aggregation> for bill validation
-  sortCol: 'tabtFortjenesteDKK',
+  sortCol: 'nettoEksportOere',
   sortDir: -1,
-  showAllBad: false,  // "Problematiske timer"-tabel: vis alle rækker vs. de første N
+  showAllBad: false,
+  showAllOverview: false,
   cache: new SpotPriceCache(),
   tariffData: null,   // {supplier, energinet, elafgift, markup} eller null hvis ikke aktiveret
 };
@@ -1215,27 +1256,21 @@ function analyze(exportRows, spotPrices, tariffs, tariffData) {
 
     if (spotOere === undefined) { missingPrices++; continue; }
 
-    let selvforbrugVaerdi, nettoEksportOere;
+    let nettoEksportOere;
     let breakdown = null;
     if (hasPerHourData) {
       const c = lookupHourlyComponents(row.hourKey, tariffData);
       if (!c.dataComplete) incompleteRows++;
       // Aftagepligt: fritaget for netselskabets indfødningstarif → nulstil den (også i per-time mode)
       if (tariffs.aftagepligt) c.supplierIndfodning = 0;
-      // Forbrugsside: consumer_price = (spot + alle forbrugs-komponenter) × 1,25
-      const consumptionExVatKr = c.distribution + c.systemTariff + c.transmissionNetTariff + c.elafgift + c.markup;
-      selvforbrugVaerdi = spotOere * 1.25 + consumptionExVatKr * 1.25 * 100;
       // Eksportside: fradrag = Energinet balance + indfødning + netselskab indfødning (fra EDS) + evt. leverandørgebyr (t4)
       const exportFradragExVatKr = c.energinetBalance + c.energinetIndfodning + c.supplierIndfodning;
       const exportFradragOere = exportFradragExVatKr * 1.25 * 100 + tariffs.t4;
       nettoEksportOere = spotOere - exportFradragOere;
       breakdown = c;
     } else {
-      selvforbrugVaerdi = spotOere * 1.25 + tariffs.selfConsumpOverhead;
       nettoEksportOere = spotOere - manualFradrag;
     }
-
-    const tabtFortjenesteDKK = Math.max(0, (selvforbrugVaerdi - nettoEksportOere) * row.kwh / 100);
 
     // Timer med forsvindende lidt eksport (typisk måle-støj mellem inverter og
     // el-måler, fx 0,001 kWh) flagges ikke som problematiske.
@@ -1247,8 +1282,6 @@ function analyze(exportRows, spotPrices, tariffs, tariffData) {
       kwh: row.kwh,
       spotOere,
       nettoEksportOere,
-      selvforbrugVaerdi,
-      tabtFortjenesteDKK,
       isDaarlig: meetsMinExport && nettoEksportOere < tariffs.badThreshold,
       isWarn: meetsMinExport && nettoEksportOere >= tariffs.badThreshold && nettoEksportOere < tariffs.warnThreshold,
       exportBreakdown: breakdown ? {
@@ -1323,30 +1356,32 @@ function renderResults(data, tariffs, { focus = true } = {}) {
     // Switch to results tab + scroll (kun ved ny analyse — ikke ved live grænseværdi-ændring)
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    document.querySelector('.tab[data-tab="bad"]').classList.add('active');
-    document.getElementById('tab-bad').classList.add('active');
+    document.querySelector('.tab[data-tab="overview"]').classList.add('active');
+    document.getElementById('tab-overview').classList.add('active');
     document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
-    state.showAllBad = false; // ny analyse → start afgrænset i "Problematiske timer"
+    state.showAllBad = false;
+    state.showAllOverview = false;
   }
 
   const bad = data.filter(d => d.isDaarlig);
   const totalKwh = data.reduce((s, d) => s + d.kwh, 0);
   const totalIncome = data.reduce((s, d) => s + d.nettoEksportOere * d.kwh / 100, 0);
-  const totalTabt = data.reduce((s, d) => s + d.tabtFortjenesteDKK, 0);
   const avgNetto = totalKwh ? totalIncome / totalKwh * 100 : 0;
+  const negativeHours = data.filter(d => d.nettoEksportOere < 0 && d.kwh >= (tariffs?.minExportKwh ?? 0));
 
   const kpis = [
     { label: 'Total eksport', value: totalKwh.toFixed(0) + ' kWh', cls: '' },
-    { label: 'Eksport-indtægt (netto)', value: fmtDKK(totalIncome), cls: 'green' },
+    { label: 'Eksport-indtægt (netto)', value: fmtDKK(totalIncome), cls: totalIncome >= 0 ? 'green' : 'red' },
     { label: 'Gns. netto-eksportpris', value: avgNetto.toFixed(1) + ' øre/kWh', cls: avgNetto < 10 ? 'red' : avgNetto < 30 ? 'amber' : '' },
+    { label: 'Timer med negativ pris', value: negativeHours.length + ' timer', cls: negativeHours.length > 20 ? 'red' : negativeHours.length > 0 ? 'amber' : 'green' },
     { label: 'Dårlige eksporttimer', value: bad.length + ' timer', cls: bad.length > 50 ? 'red' : bad.length > 0 ? 'amber' : 'green' },
-    { label: 'Tabt vs. selvforbrug', value: fmtDKK(totalTabt), cls: totalTabt > 500 ? 'red' : totalTabt > 100 ? 'amber' : 'green' },
   ];
 
   document.getElementById('kpiGrid').innerHTML = kpis.map(k =>
     `<div class="kpi"><div class="kpi-label">${k.label}</div><div class="kpi-value ${k.cls}">${k.value}</div></div>`
   ).join('');
 
+  renderOverview(data, tariffs);
   renderBadHoursTable(data, tariffs);
   renderMonthlyTable(data);
   renderRevenueValidation(data);
@@ -1376,7 +1411,7 @@ function renderBadHoursTable(data, tariffs) {
   const tbody = document.getElementById('badHoursBody');
 
   if (sorted.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px">Ingen timer under grænseværdien 🎉</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">Ingen timer under grænseværdien 🎉</td></tr>';
     return;
   }
 
@@ -1393,15 +1428,13 @@ function renderBadHoursTable(data, tariffs) {
       <td>${d.kwh.toFixed(3)}</td>
       <td>${d.spotOere.toFixed(1)}</td>
       <td style="color:${d.nettoEksportOere < 0 ? 'var(--red)' : 'inherit'}">${d.nettoEksportOere.toFixed(1)}</td>
-      <td>${d.selvforbrugVaerdi.toFixed(1)}</td>
-      <td>${fmtDKK(d.tabtFortjenesteDKK)}</td>
       <td>${badge}</td>
     </tr>`;
   }).join('');
 
   if (truncated) {
-    html += `<tr><td colspan="7" style="text-align:center;padding:14px;color:var(--muted)">
-      Viser de ${BAD_ROWS_LIMIT} med størst tabt fortjeneste af <strong style="color:var(--text)">${sorted.length}</strong> timer —
+    html += `<tr><td colspan="5" style="text-align:center;padding:14px;color:var(--muted)">
+      Viser ${BAD_ROWS_LIMIT} af <strong style="color:var(--text)">${sorted.length}</strong> timer —
       <a href="#" id="showAllBad" style="color:var(--accent);text-decoration:none">vis alle ${sorted.length}</a>
       (eller brug "Eksporter CSV" for hele listen)
     </td></tr>`;
@@ -1420,12 +1453,12 @@ function renderMonthlyTable(data) {
   const months = new Map();
   for (const d of data) {
     const key = d.hourKey.slice(0, 7); // "YYYY-MM" direct from string key
-    if (!months.has(key)) months.set(key, { kwh: 0, income: 0, bad: 0, tabt: 0, count: 0, nettoSum: 0 });
+    if (!months.has(key)) months.set(key, { kwh: 0, income: 0, bad: 0, negative: 0, count: 0, nettoSum: 0 });
     const m = months.get(key);
     m.kwh += d.kwh;
     m.income += d.nettoEksportOere * d.kwh / 100;
     m.bad += d.isDaarlig ? 1 : 0;
-    m.tabt += d.tabtFortjenesteDKK;
+    m.negative += d.nettoEksportOere < 0 ? 1 : 0;
     m.nettoSum += d.nettoEksportOere;
     m.count++;
   }
@@ -1437,10 +1470,111 @@ function renderMonthlyTable(data) {
       <td>${m.kwh.toFixed(1)}</td>
       <td>${fmtDKK(m.income)}</td>
       <td style="color:${m.nettoSum/m.count < 10 ? 'var(--red)' : 'inherit'}">${(m.nettoSum/m.count).toFixed(1)}</td>
+      <td style="color:${m.negative > 0 ? 'var(--red)' : 'var(--green)'}">${m.negative > 0 ? m.negative : '—'}</td>
       <td style="color:${m.bad > 10 ? 'var(--red)' : m.bad > 0 ? 'var(--accent)' : 'var(--green)'}">${m.bad}</td>
-      <td style="color:${m.tabt > 50 ? 'var(--red)' : 'inherit'}">${fmtDKK(m.tabt)}</td>
     </tr>`
   ).join('');
+}
+
+// ─── Oversigt ─────────────────────────────────────────────────────────────────
+
+function renderOverview(data, tariffs) {
+  const minKwh = tariffs?.minExportKwh ?? 0;
+
+  // 1. Månedlig søjlegraf
+  const months = new Map();
+  for (const d of data) {
+    const key = d.hourKey.slice(0, 7);
+    if (!months.has(key)) months.set(key, { kwh: 0, income: 0 });
+    const m = months.get(key);
+    m.kwh  += d.kwh;
+    m.income += d.nettoEksportOere * d.kwh / 100;
+  }
+  const monthEntries = [...months.entries()].sort();
+  const maxAbs = Math.max(...monthEntries.map(([, m]) => Math.abs(m.income)), 0.01);
+  const fmtKr = v => {
+    const s = v < 0 ? '−' : '';
+    const a = Math.abs(v);
+    return s + (a < 100 ? a.toFixed(0) : Math.round(a)) + ' kr';
+  };
+  const MON = ['Jan','Feb','Mar','Apr','Maj','Jun','Jul','Aug','Sep','Okt','Nov','Dec'];
+  document.getElementById('overviewChart').innerHTML = monthEntries.map(([k, m]) => {
+    const [yr, mo] = k.split('-');
+    const hPx = Math.max(Math.abs(m.income) / maxAbs * 80, 2);
+    const col = m.income < 0 ? 'var(--red)' : m.income < 5 ? 'var(--accent)' : 'var(--green)';
+    return `<div class="chart-bar-wrap">
+      <div class="chart-bar-val" style="color:${col}">${fmtKr(m.income)}</div>
+      <div class="chart-bar" style="height:${hPx}px;background:${col}"></div>
+      <div class="chart-bar-label">${MON[+mo-1]}<br>${yr}</div>
+    </div>`;
+  }).join('') || '<span style="color:var(--muted);font-size:0.85rem">Ingen data</span>';
+
+  // 2. Timer-fordeling
+  const relevant = data.filter(d => d.kwh >= minKwh);
+  const goodCount = relevant.filter(d => !d.isDaarlig && !d.isWarn).length;
+  const warnCount = relevant.filter(d => d.isWarn).length;
+  const badCount  = relevant.filter(d => d.isDaarlig).length;
+  const total = relevant.length;
+
+  if (total > 0) {
+    const gPct = (goodCount / total * 100).toFixed(1);
+    const wPct = (warnCount / total * 100).toFixed(1);
+    const bPct = (badCount  / total * 100).toFixed(1);
+    document.getElementById('overviewDist').innerHTML =
+      `<div class="dist-segment" style="width:${gPct}%;background:var(--green)" title="${goodCount} timer god pris"></div>` +
+      `<div class="dist-segment" style="width:${wPct}%;background:var(--accent)" title="${warnCount} timer lav pris"></div>` +
+      `<div class="dist-segment" style="width:${bPct}%;background:var(--red)" title="${badCount} timer dårlig/negativ"></div>`;
+    document.getElementById('overviewDistLegend').innerHTML =
+      `<span style="color:var(--green)">${goodCount} timer god pris</span> · ` +
+      `<span style="color:var(--accent)">${warnCount} timer lav pris</span> · ` +
+      `<span style="color:var(--red)">${badCount} timer dårlig/negativ</span>` +
+      ` — ${total} eksportimer i alt`;
+  } else {
+    document.getElementById('overviewDist').innerHTML =
+      '<div class="dist-segment" style="width:100%;background:var(--border)"></div>';
+    document.getElementById('overviewDistLegend').textContent = 'Ingen data';
+  }
+
+  // 3. Alle eksportimer — nyeste øverst, pagineret
+  const sorted = [...data].sort((a, b) => b.hourKey.localeCompare(a.hourKey));
+  const OVERVIEW_LIMIT = 500;
+  const truncated = !state.showAllOverview && sorted.length > OVERVIEW_LIMIT;
+  const shown = truncated ? sorted.slice(0, OVERVIEW_LIMIT) : sorted;
+
+  let html = shown.map(d => {
+    const cls   = d.isDaarlig ? 'bad' : d.isWarn ? 'warn' : 'good';
+    const badge = d.nettoEksportOere < 0
+      ? `<span class="badge red">Negativ pris</span>`
+      : d.isDaarlig
+        ? `<span class="badge red">Dårlig</span>`
+        : d.isWarn
+          ? `<span class="badge amber">Lav pris</span>`
+          : `<span class="badge green">God pris</span>`;
+    const nettoCol = d.nettoEksportOere < 0 ? 'var(--red)' : d.isWarn ? 'var(--accent)' : '';
+    return `<tr class="${cls}">
+      <td>${fmtDate(d.timestamp)}</td>
+      <td>${d.kwh.toFixed(3)}</td>
+      <td>${d.spotOere.toFixed(1)}</td>
+      <td${nettoCol ? ` style="color:${nettoCol}"` : ''}>${d.nettoEksportOere.toFixed(1)}</td>
+      <td>${badge}</td>
+    </tr>`;
+  }).join('');
+
+  if (truncated) {
+    html += `<tr><td colspan="5" style="text-align:center;padding:14px;color:var(--muted)">
+      Viser ${OVERVIEW_LIMIT} af <strong style="color:var(--text)">${sorted.length}</strong> timer —
+      <a href="#" id="showAllOverview" style="color:var(--accent);text-decoration:none">vis alle ${sorted.length}</a>
+      (eller brug "Eksporter CSV" for hele listen)
+    </td></tr>`;
+  }
+  document.getElementById('overviewBody').innerHTML = html;
+
+  const link = document.getElementById('showAllOverview');
+  if (link) link.addEventListener('click', e => {
+    e.preventDefault();
+    state.showAllOverview = true;
+    renderOverview(data, tariffs);
+  });
 }
 
 // ─── Afregnings-validering ────────────────────────────────────────────────────
@@ -1785,16 +1919,14 @@ function fmtMonth(k) {
 function exportCSV() {
   if (!state.analysisData) return;
   const rows = [
-    ['Dato', 'Time', 'kWh eksporteret', 'Spotpris (øre/kWh)', 'Netto eksportpris (øre/kWh)', 'Selvforbrugsværdi (øre/kWh)', 'Tabt fortjeneste (kr)', 'Status'],
+    ['Dato', 'Time', 'kWh eksporteret', 'Spotpris (øre/kWh)', 'Netto eksportpris (øre/kWh)', 'Status'],
     ...state.analysisData.map(d => [
       d.timestamp.toLocaleDateString('da-DK'),
       d.timestamp.toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' }),
       d.kwh.toFixed(3).replace('.', ','),
       d.spotOere.toFixed(2).replace('.', ','),
       d.nettoEksportOere.toFixed(2).replace('.', ','),
-      d.selvforbrugVaerdi.toFixed(2).replace('.', ','),
-      d.tabtFortjenesteDKK.toFixed(2).replace('.', ','),
-      d.isDaarlig ? 'Dårlig' : d.isWarn ? 'Lav' : 'OK',
+      d.nettoEksportOere < 0 ? 'Negativ pris' : d.isDaarlig ? 'Dårlig' : d.isWarn ? 'Lav' : 'OK',
     ])
   ];
   const csv = rows.map(r => r.join(';')).join('\n');
@@ -2929,6 +3061,7 @@ document.getElementById('btnAnalyze').addEventListener('click', async () => {
 });
 
 document.getElementById('btnExportCSV').addEventListener('click', exportCSV);
+document.getElementById('btnExportCSVOverview').addEventListener('click', exportCSV);
 
 document.getElementById('btnClearCache').addEventListener('click', async () => {
   const priceArea = document.getElementById('priceArea').value;
