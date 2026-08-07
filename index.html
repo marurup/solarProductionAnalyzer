@@ -354,10 +354,10 @@
   <!-- AFSNIT 1: Netselskab — fælles for køb og salg (udfyldes via adresse) -->
   <div id="section-quickconfig" class="config-part">
     <h3>Netselskab &amp; område <span style="color:var(--muted); font-size:0.78rem; font-weight:400">— fælles for køb og salg</span></h3>
-    <p style="margin-bottom:14px">Dit netselskab står for transporten af strømmen og opkræver tariffer <strong>begge veje</strong> — distribution når du køber, indfødning når du sælger. Det bestemmes af din adresse og er derfor fælles. Skriv adressen, vælg netselskab og elaftale, så udfyldes tarifferne automatisk ud fra <a href="https://stromligning.dk" target="_blank" style="color:var(--accent)">Strømligning</a>. Indstillingerne gemmes lokalt i din browser.</p>
+    <p style="margin-bottom:14px">Dit netselskab står for transporten af strømmen og opkræver tariffer <strong>begge veje</strong> — distribution når du køber, indfødning når du sælger. Vælg netselskab, prisområde og elaftale nedenfor — eller brug adressesøgningen som genvej til at auto-udfylde dem automatisk fra <a href="https://stromligning.dk" target="_blank" style="color:var(--accent)">Strømligning</a>. Indstillingerne gemmes lokalt i din browser.</p>
 
     <div class="field" style="margin-bottom:14px; position:relative;">
-      <label>Adresse</label>
+      <label style="color:var(--muted)">Genvej: auto-udfyld via adresse <span style="font-weight:400">(valgfrit)</span></label>
       <input type="text" id="addressInput" placeholder="Begynd at skrive — fx 'Nørrebrogade 1, 2200'" autocomplete="off" style="width:100%; background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:8px 12px; color:var(--text); font-size:0.95rem;">
       <div id="addressSuggestions" style="display:none; position:absolute; top:100%; left:0; right:0; background:var(--surface); border:1px solid var(--border); border-radius:6px; margin-top:2px; max-height:240px; overflow-y:auto; z-index:50;"></div>
       <span class="field-unit" id="addressHint" style="margin-top:6px;"></span>
@@ -366,7 +366,7 @@
     <div class="tariff-grid" style="margin-bottom:14px;">
       <div class="field">
         <label>Netselskab</label>
-        <select id="supplierSelect"><option value="">— vælg adresse først —</option></select>
+        <select id="supplierSelect"><option value="">— vælg netselskab —</option></select>
         <span class="field-unit" id="supplierHint"></span>
       </div>
       <div class="field">
@@ -1976,7 +1976,7 @@ async function populateSuppliers(priceArea, preselectId = null, foundList = null
     }
     document.getElementById('supplierHint').textContent = foundIds.size === 1
       ? `Auto-detekteret: ${filtered.find(s => foundIds.has(s.id))?.name}`
-      : `${filtered.length} netselskaber i ${priceArea}`;
+      : priceArea ? `${filtered.length} netselskaber i ${priceArea}` : `${filtered.length} netselskaber`;
   } catch (e) {
     document.getElementById('supplierHint').textContent = `Kunne ikke hente: ${e.message}`;
   }
@@ -2388,7 +2388,7 @@ btnApply.addEventListener('click', applyQuickConfig);
       if (r.ok) foundList = await r.json();
     } catch {}
   }
-  if (cfg.priceArea) await populateSuppliers(cfg.priceArea, null, foundList);
+  await populateSuppliers(cfg.priceArea || null, null, foundList);
 
   // Indlæs statisk tariff-data hvis brugeren har valgt en supplier + et produkt
   if (cfg.supplierId && cfg.productId) {
