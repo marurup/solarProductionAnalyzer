@@ -203,6 +203,8 @@
     tr.bad td:first-child { border-left: 3px solid var(--red); }
     tr.warn td:first-child { border-left: 3px solid var(--accent); }
     tr.good td:first-child { border-left: 3px solid var(--green); }
+    tr.neg td:first-child { border-left: 3px solid var(--red); }
+    tr.daarlig td:first-child { border-left: 3px solid #f97316; }
     .badge {
       display: inline-block; padding: 2px 8px; border-radius: 4px;
       font-size: 0.75rem; font-weight: 600;
@@ -210,6 +212,7 @@
     .badge.red { background: rgba(239,68,68,0.15); color: var(--red); }
     .badge.amber { background: rgba(245,158,11,0.15); color: var(--accent); }
     .badge.green { background: rgba(34,197,94,0.15); color: var(--green); }
+    .badge.orange { background: rgba(249,115,22,0.15); color: #f97316; }
 
     /* Oversigt: månedlig søjlegraf */
     .chart-bars { display: flex; gap: 5px; align-items: flex-end; min-height: 80px; overflow-x: auto; padding-bottom: 2px; }
@@ -547,6 +550,26 @@
         <div class="dist-bar" id="overviewDist"></div>
         <div id="overviewDistLegend" style="font-size:0.78rem; color:var(--muted)"></div>
       </div>
+      <div style="margin-bottom:24px">
+        <h3 style="margin-bottom:10px">Månedlig fordeling</h3>
+        <div class="table-wrap">
+          <table id="overviewMonthlyTable">
+            <thead>
+              <tr>
+                <th class="th-static">Måned</th>
+                <th class="th-static">Indtægt ved eksport</th>
+                <th class="th-static" style="color:var(--green)">God pris</th>
+                <th class="th-static" style="color:var(--accent)">Lav pris</th>
+                <th class="th-static" style="color:#f97316">Dårlig</th>
+                <th class="th-static" style="color:var(--red)">Negativ pris</th>
+                <th class="th-static" style="color:var(--red)">Betalt for eksport</th>
+              </tr>
+            </thead>
+            <tbody id="overviewMonthlyBody"></tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="row" style="margin-bottom:10px">
         <h3>Alle eksportimer</h3>
         <div class="spacer"></div>
@@ -615,8 +638,8 @@
               <th>kWh eksporteret</th>
               <th>Indtægt (kr)</th>
               <th>Gns. netto-pris (øre/kWh)</th>
-              <th>Timer m. negativ pris</th>
-              <th>Dårlige timer</th>
+              <th>Negative timer</th>
+              <th>Timer under grænse</th>
             </tr>
           </thead>
           <tbody id="monthlyBody"></tbody>
@@ -1368,13 +1391,15 @@ function renderResults(data, tariffs, { focus = true } = {}) {
   const totalIncome = data.reduce((s, d) => s + d.nettoEksportOere * d.kwh / 100, 0);
   const avgNetto = totalKwh ? totalIncome / totalKwh * 100 : 0;
   const negativeHours = data.filter(d => d.nettoEksportOere < 0 && d.kwh >= (tariffs?.minExportKwh ?? 0));
+  const negLoss = negativeHours.reduce((s, d) => s + d.nettoEksportOere * d.kwh / 100, 0);
 
   const kpis = [
-    { label: 'Total eksport', value: totalKwh.toFixed(0) + ' kWh', cls: '' },
-    { label: 'Eksport-indtægt (netto)', value: fmtDKK(totalIncome), cls: totalIncome >= 0 ? 'green' : 'red' },
+    { label: 'Eksport i alt', value: totalKwh.toFixed(0) + ' kWh', cls: '' },
+    { label: 'Indtægt ved eksport', value: fmtDKK(totalIncome), cls: totalIncome >= 0 ? 'green' : 'red' },
     { label: 'Gns. netto-eksportpris', value: avgNetto.toFixed(1) + ' øre/kWh', cls: avgNetto < 10 ? 'red' : avgNetto < 30 ? 'amber' : '' },
-    { label: 'Timer med negativ pris', value: negativeHours.length + ' timer', cls: negativeHours.length > 20 ? 'red' : negativeHours.length > 0 ? 'amber' : 'green' },
-    { label: 'Dårlige eksporttimer', value: bad.length + ' timer', cls: bad.length > 50 ? 'red' : bad.length > 0 ? 'amber' : 'green' },
+    { label: 'Betalt for eksport', value: negLoss < 0 ? fmtDKK(Math.abs(negLoss)) : '—', cls: negLoss < 0 ? 'red' : 'green' },
+    { label: 'Negative eksporttimer', value: negativeHours.length + ' timer', cls: negativeHours.length > 20 ? 'red' : negativeHours.length > 0 ? 'amber' : 'green' },
+    { label: 'Timer under grænse', value: bad.length + ' timer', cls: bad.length > 50 ? 'red' : bad.length > 0 ? 'amber' : 'green' },
   ];
 
   document.getElementById('kpiGrid').innerHTML = kpis.map(k =>
@@ -1509,25 +1534,29 @@ function renderOverview(data, tariffs) {
     </div>`;
   }).join('') || '<span style="color:var(--muted);font-size:0.85rem">Ingen data</span>';
 
-  // 2. Timer-fordeling
+  // 2. Timer-fordeling (4 kategorier)
   const relevant = data.filter(d => d.kwh >= minKwh);
-  const goodCount = relevant.filter(d => !d.isDaarlig && !d.isWarn).length;
+  const negCount  = relevant.filter(d => d.nettoEksportOere < 0).length;
+  const badCount  = relevant.filter(d => d.isDaarlig && d.nettoEksportOere >= 0).length;
   const warnCount = relevant.filter(d => d.isWarn).length;
-  const badCount  = relevant.filter(d => d.isDaarlig).length;
+  const goodCount = relevant.filter(d => !d.isDaarlig && !d.isWarn).length;
   const total = relevant.length;
 
   if (total > 0) {
     const gPct = (goodCount / total * 100).toFixed(1);
     const wPct = (warnCount / total * 100).toFixed(1);
     const bPct = (badCount  / total * 100).toFixed(1);
+    const nPct = (negCount  / total * 100).toFixed(1);
     document.getElementById('overviewDist').innerHTML =
       `<div class="dist-segment" style="width:${gPct}%;background:var(--green)" title="${goodCount} timer god pris"></div>` +
       `<div class="dist-segment" style="width:${wPct}%;background:var(--accent)" title="${warnCount} timer lav pris"></div>` +
-      `<div class="dist-segment" style="width:${bPct}%;background:var(--red)" title="${badCount} timer dårlig/negativ"></div>`;
+      `<div class="dist-segment" style="width:${bPct}%;background:#f97316" title="${badCount} timer dårlig"></div>` +
+      `<div class="dist-segment" style="width:${nPct}%;background:var(--red)" title="${negCount} timer negativ pris"></div>`;
     document.getElementById('overviewDistLegend').innerHTML =
-      `<span style="color:var(--green)">${goodCount} timer god pris</span> · ` +
-      `<span style="color:var(--accent)">${warnCount} timer lav pris</span> · ` +
-      `<span style="color:var(--red)">${badCount} timer dårlig/negativ</span>` +
+      `<span style="color:var(--green)">${goodCount} god pris</span> · ` +
+      `<span style="color:var(--accent)">${warnCount} lav pris</span> · ` +
+      `<span style="color:#f97316">${badCount} dårlig</span> · ` +
+      `<span style="color:var(--red)">${negCount} negativ pris</span>` +
       ` — ${total} eksportimer i alt`;
   } else {
     document.getElementById('overviewDist').innerHTML =
@@ -1535,22 +1564,48 @@ function renderOverview(data, tariffs) {
     document.getElementById('overviewDistLegend').textContent = 'Ingen data';
   }
 
-  // 3. Alle eksportimer — nyeste øverst, pagineret
+  // 3. Månedlig fordeling
+  const byMonth = new Map();
+  for (const d of relevant) {
+    const key = d.hourKey.slice(0, 7);
+    if (!byMonth.has(key)) byMonth.set(key, { good: 0, warn: 0, bad: 0, neg: 0, negTab: 0, income: 0 });
+    const m = byMonth.get(key);
+    m.income += d.nettoEksportOere * d.kwh / 100;
+    if (d.nettoEksportOere < 0)      { m.neg++; m.negTab += d.nettoEksportOere * d.kwh / 100; }
+    else if (d.isDaarlig)             m.bad++;
+    else if (d.isWarn)                m.warn++;
+    else                              m.good++;
+  }
+  document.getElementById('overviewMonthlyBody').innerHTML =
+    [...byMonth.entries()].sort().map(([k, m]) =>
+      `<tr>
+        <td>${fmtMonth(k)}</td>
+        <td style="color:${m.income >= 0 ? 'var(--green)' : 'var(--red)'}">${fmtDKK(m.income)}</td>
+        <td style="color:var(--green)">${m.good || '—'}</td>
+        <td style="color:${m.warn > 0 ? 'var(--accent)' : 'var(--muted)'}">${m.warn || '—'}</td>
+        <td style="color:${m.bad  > 0 ? '#f97316'       : 'var(--muted)'}">${m.bad  || '—'}</td>
+        <td style="color:${m.neg  > 0 ? 'var(--red)'    : 'var(--muted)'}">${m.neg  || '—'}</td>
+        <td style="color:${m.neg  > 0 ? 'var(--red)'    : 'var(--muted)'}">${m.neg > 0 ? fmtDKK(Math.abs(m.negTab)) : '—'}</td>
+      </tr>`
+    ).join('');
+
+  // 4. Alle eksportimer — nyeste øverst, pagineret
   const sorted = [...data].sort((a, b) => b.hourKey.localeCompare(a.hourKey));
   const OVERVIEW_LIMIT = 500;
   const truncated = !state.showAllOverview && sorted.length > OVERVIEW_LIMIT;
   const shown = truncated ? sorted.slice(0, OVERVIEW_LIMIT) : sorted;
 
   let html = shown.map(d => {
-    const cls   = d.isDaarlig ? 'bad' : d.isWarn ? 'warn' : 'good';
-    const badge = d.nettoEksportOere < 0
+    const isNeg = d.nettoEksportOere < 0;
+    const cls   = isNeg ? 'neg' : d.isDaarlig ? 'daarlig' : d.isWarn ? 'warn' : 'good';
+    const badge = isNeg
       ? `<span class="badge red">Negativ pris</span>`
       : d.isDaarlig
-        ? `<span class="badge red">Dårlig</span>`
+        ? `<span class="badge orange">Dårlig</span>`
         : d.isWarn
           ? `<span class="badge amber">Lav pris</span>`
           : `<span class="badge green">God pris</span>`;
-    const nettoCol = d.nettoEksportOere < 0 ? 'var(--red)' : d.isWarn ? 'var(--accent)' : '';
+    const nettoCol = isNeg ? 'var(--red)' : d.isDaarlig ? '#f97316' : d.isWarn ? 'var(--accent)' : '';
     return `<tr class="${cls}">
       <td>${fmtDate(d.timestamp)}</td>
       <td>${d.kwh.toFixed(3)}</td>
