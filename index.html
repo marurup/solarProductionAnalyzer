@@ -2522,7 +2522,8 @@ updateExportDeductionUI();
     const o = document.createElement('option');
     o.value = String(i);
     const pris = a.spread == null ? 'se link' : `${Number(a.spread).toLocaleString('da-DK')} øre/kWh`;
-    o.textContent = `${a.navn} — ${pris}`;
+    const abon = a.abonnement == null ? '' : ` · ${a.abonnement === 0 ? 'gratis abonnement' : a.abonnement + ' kr/md'}`;
+    o.textContent = `${a.navn} — ${pris}${abon}`;
     sel.appendChild(o);
   });
 
@@ -2531,6 +2532,7 @@ updateExportDeductionUI();
   function showNote(a) {
     if (!a) { note.innerHTML = ''; return; }
     const bits = [];
+    if (a.abonnement != null) bits.push(`abonnement: ${a.abonnement === 0 ? 'gratis' : a.abonnement + ' kr/md'}`);
     if (a.kilde) bits.push(`kilde: ${a.kilde}`);
     if (a.url) bits.push(`<a href="${a.url}" target="_blank" rel="noopener" style="color:var(--accent)">se aktuel pris ↗</a>`);
     if (a.opdateret) bits.push(`tjekket ${a.opdateret}`);

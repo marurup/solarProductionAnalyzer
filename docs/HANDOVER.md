@@ -124,6 +124,18 @@ Søg på `// TODO` i `index.html` og `scripts/`.
 - Trigger "Update tariffs" → henter direkte fra EDS (autoritativ kilde)
 - INGEN manuel rate-tabel skal vedligeholdes
 
+**Når produktionsaftagerlisten skal opdateres (`data/produktionsaftagere.json`):**
+- Listen er **100% manuel** — ingen automatik. Vilkår ændres hos elhandlerne uden varsel.
+- **Tilføj kun selskaber med verificeret URL og kilde** — brug `"spread": null` hvis øre/kWh ikke er bekræftet (vises i dropdown men auto-udfylder ikke t4; brugeren ser en note om at verificere).
+- Procedure pr. ny post:
+  1. Find selskabets officielle prisside for produktionsaftale
+  2. Notér `spread` (øre/kWh), abonnementspris og evt. betingelser (som elkunde/kun produktion)
+  3. Udfyld `navn`, `spread`, `note` (vilkår + betingelser), `kilde` (domænenavn), `url` (direkte link til prissiden), `opdateret` (YYYY-MM)
+  4. Ret global `opdateret`-dato øverst i filen
+  5. Commit + push (ingen workflow — bare rediger filen direkte)
+- **Bekræft altid mod en faktisk afregning** inden `spread` sættes til en konkret værdi.
+- Selskaber der er gået konkurs eller ophørt: fjern fra listen.
+
 ## 4. Kendte edge cases
 
 ### CSV-parser
