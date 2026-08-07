@@ -535,6 +535,7 @@
     <div class="tabs">
       <div class="tab active" data-tab="overview">Oversigt</div>
       <div class="tab" data-tab="bad">Timer under grænse</div>
+      <div class="tab" data-tab="allhours">Alle eksportimer</div>
       <div class="tab" data-tab="monthly">Månedsoversigt</div>
       <div class="tab" data-tab="revenue">Afregnings-validering</div>
       <div class="tab" data-tab="bill">Elforbrug-validering</div>
@@ -570,25 +571,6 @@
         </div>
       </div>
 
-      <div class="row" style="margin-bottom:10px">
-        <h3>Alle eksportimer</h3>
-        <div class="spacer"></div>
-        <button class="btn btn-secondary" id="btnExportCSVOverview" style="font-size:0.82rem; padding:6px 14px;">Eksporter CSV</button>
-      </div>
-      <div class="table-wrap">
-        <table id="overviewTable">
-          <thead>
-            <tr>
-              <th class="th-static">Dato/tid</th>
-              <th class="th-static">kWh eksporteret</th>
-              <th class="th-static">Spotpris (øre)</th>
-              <th class="th-static">Netto eksport (øre)</th>
-              <th class="th-static">Status</th>
-            </tr>
-          </thead>
-          <tbody id="overviewBody"></tbody>
-        </table>
-      </div>
     </div>
 
     <div class="tab-content" id="tab-bad">
@@ -625,6 +607,28 @@
             </tr>
           </thead>
           <tbody id="badHoursBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="tab-content" id="tab-allhours">
+      <div class="row" style="margin-bottom:10px">
+        <span style="font-size:0.85rem; color:var(--muted)">Alle eksportimer, nyeste øverst. Farvet efter netto eksportpris.</span>
+        <div class="spacer"></div>
+        <button class="btn btn-secondary" id="btnExportCSVOverview" style="font-size:0.82rem; padding:6px 14px;">Eksporter CSV</button>
+      </div>
+      <div class="table-wrap">
+        <table id="overviewTable">
+          <thead>
+            <tr>
+              <th class="th-static">Dato/tid</th>
+              <th class="th-static">kWh eksporteret</th>
+              <th class="th-static">Spotpris (øre)</th>
+              <th class="th-static">Netto eksport (øre)</th>
+              <th class="th-static">Status</th>
+            </tr>
+          </thead>
+          <tbody id="overviewBody"></tbody>
         </table>
       </div>
     </div>
@@ -1576,18 +1580,36 @@ function renderOverview(data, tariffs) {
     else if (d.isWarn)                m.warn++;
     else                              m.good++;
   }
-  document.getElementById('overviewMonthlyBody').innerHTML =
-    [...byMonth.entries()].sort().map(([k, m]) =>
-      `<tr>
-        <td>${fmtMonth(k)}</td>
-        <td style="color:${m.income >= 0 ? 'var(--green)' : 'var(--red)'}">${fmtDKK(m.income)}</td>
-        <td style="color:var(--green)">${m.good || '—'}</td>
-        <td style="color:${m.warn > 0 ? 'var(--accent)' : 'var(--muted)'}">${m.warn || '—'}</td>
-        <td style="color:${m.bad  > 0 ? '#f97316'       : 'var(--muted)'}">${m.bad  || '—'}</td>
-        <td style="color:${m.neg  > 0 ? 'var(--red)'    : 'var(--muted)'}">${m.neg  || '—'}</td>
-        <td style="color:${m.neg  > 0 ? 'var(--red)'    : 'var(--muted)'}">${m.neg > 0 ? fmtDKK(Math.abs(m.negTab)) : '—'}</td>
-      </tr>`
-    ).join('');
+  const monthRows = [...byMonth.entries()].sort();
+  const tot = monthRows.reduce((s, [, m]) => {
+    s.income += m.income; s.good += m.good; s.warn += m.warn;
+    s.bad += m.bad; s.neg += m.neg; s.negTab += m.negTab;
+    return s;
+  }, { income: 0, good: 0, warn: 0, bad: 0, neg: 0, negTab: 0 });
+
+  const rowsHtml = monthRows.map(([k, m]) =>
+    `<tr>
+      <td>${fmtMonth(k)}</td>
+      <td style="color:${m.income >= 0 ? 'var(--green)' : 'var(--red)'}">${fmtDKK(m.income)}</td>
+      <td style="color:var(--green)">${m.good || '—'}</td>
+      <td style="color:${m.warn > 0 ? 'var(--accent)' : 'var(--muted)'}">${m.warn || '—'}</td>
+      <td style="color:${m.bad  > 0 ? '#f97316'       : 'var(--muted)'}">${m.bad  || '—'}</td>
+      <td style="color:${m.neg  > 0 ? 'var(--red)'    : 'var(--muted)'}">${m.neg  || '—'}</td>
+      <td style="color:${m.neg  > 0 ? 'var(--red)'    : 'var(--muted)'}">${m.neg > 0 ? fmtDKK(Math.abs(m.negTab)) : '—'}</td>
+    </tr>`
+  ).join('');
+
+  const totalHtml = `<tr style="border-top:2px solid var(--border);font-weight:600">
+    <td>I alt</td>
+    <td style="color:${tot.income >= 0 ? 'var(--green)' : 'var(--red)'}">${fmtDKK(tot.income)}</td>
+    <td style="color:var(--green)">${tot.good}</td>
+    <td style="color:${tot.warn > 0 ? 'var(--accent)' : 'var(--muted)'}">${tot.warn || '—'}</td>
+    <td style="color:${tot.bad  > 0 ? '#f97316'       : 'var(--muted)'}">${tot.bad  || '—'}</td>
+    <td style="color:${tot.neg  > 0 ? 'var(--red)'    : 'var(--muted)'}">${tot.neg  || '—'}</td>
+    <td style="color:${tot.neg  > 0 ? 'var(--red)'    : 'var(--muted)'}">${tot.neg > 0 ? fmtDKK(Math.abs(tot.negTab)) : '—'}</td>
+  </tr>`;
+
+  document.getElementById('overviewMonthlyBody').innerHTML = rowsHtml + totalHtml;
 
   // 4. Alle eksportimer — nyeste øverst, pagineret
   const sorted = [...data].sort((a, b) => b.hourKey.localeCompare(a.hourKey));
