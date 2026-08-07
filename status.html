@@ -102,6 +102,13 @@
   <div id="monthsByArea"></div>
 </div>
 
+<!-- Produktionsaftagere -->
+<div class="card">
+  <h2>Produktionsaftagere</h2>
+  <p style="margin-bottom:14px">Manuelt vedligeholdt liste over elhandlere der køber overskudsstrøm. Spread = elhandlerens eget tillæg oven i de regulerede tariffer (Energinet + netselskab).</p>
+  <div id="aftagerStats"><div class="loading">Indlæser...</div></div>
+</div>
+
 <!-- Tariff-data (netselskaber + konstanter) -->
 <div class="card">
   <h2>Tariff-data (historiske rates)</h2>
@@ -374,9 +381,61 @@ document.getElementById('btnClearLocal').addEventListener('click', async () => {
   loadLocalCache();
 });
 
+// ─── Produktionsaftagere ──────────────────────────────────────────────────────
+async function loadAftagerStats() {
+  const el = document.getElementById('aftagerStats');
+  try {
+    const resp = await fetch('data/produktionsaftagere.json', { cache: 'no-cache' });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    const liste = Array.isArray(data.aftagere) ? data.aftagere : [];
+
+    const rows = liste.map(a => {
+      const spread = a.spread == null
+        ? `<span style="color:var(--muted); font-style:italic">ubekræftet</span>`
+        : `<strong>${Number(a.spread).toLocaleString('da-DK')} øre/kWh</strong>`;
+      const abon = a.abonnement == null
+        ? `<span style="color:var(--muted)">—</span>`
+        : a.abonnement === 0
+          ? `<span style="color:var(--green)">gratis</span>`
+          : `${a.abonnement} kr/md`;
+      const link = a.url
+        ? `<a href="${a.url}" target="_blank" rel="noopener">se pris ↗</a>`
+        : `<span style="color:var(--muted)">—</span>`;
+      return `<tr style="border-bottom:1px solid var(--border);">
+        <td style="padding:7px 12px 7px 0; font-size:0.88rem;">${a.navn}</td>
+        <td style="padding:7px 12px; font-size:0.88rem; white-space:nowrap;">${spread}</td>
+        <td style="padding:7px 12px; font-size:0.88rem; white-space:nowrap;">${abon}</td>
+        <td style="padding:7px 12px; font-size:0.82rem; color:var(--muted);">${a.note || ''}</td>
+        <td style="padding:7px 0; font-size:0.82rem; white-space:nowrap;">${link}</td>
+      </tr>`;
+    }).join('');
+
+    el.innerHTML = `
+      <p style="font-size:0.8rem; margin-bottom:10px;">Sidst opdateret: ${data.opdateret || '—'} &nbsp;·&nbsp; ${liste.length} aftagere</p>
+      <div style="overflow-x:auto;">
+        <table style="width:100%; font-size:0.85rem; border-collapse:collapse;">
+          <thead>
+            <tr style="border-bottom:1px solid var(--border); color:var(--muted); font-size:0.75rem; text-transform:uppercase;">
+              <th style="text-align:left; padding:4px 12px 8px 0; font-weight:normal;">Selskab</th>
+              <th style="text-align:left; padding:4px 12px 8px; font-weight:normal;">Spread</th>
+              <th style="text-align:left; padding:4px 12px 8px; font-weight:normal;">Abonnement</th>
+              <th style="text-align:left; padding:4px 12px 8px; font-weight:normal;">Note</th>
+              <th style="text-align:left; padding:4px 0 8px; font-weight:normal;">Kilde</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  } catch (e) {
+    el.innerHTML = `<div class="empty">Kunne ikke indlæse aftagerlisten: ${e.message}</div>`;
+  }
+}
+
 loadStoredConfig();
 loadLocalCache();
 loadManifest();
+loadAftagerStats();
 loadTariffStats();
 </script>
 </body>
