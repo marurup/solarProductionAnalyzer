@@ -1,6 +1,6 @@
 # Solcelle Eksport-Analyse
 
-Statisk web-app der hjælper danske solcelleejere med at identificere "dårlige eksporttimer" — timer hvor strøm blev solgt til lav/negativ nettopris, og hvor selvforbrug eller batteri havde givet langt højere værdi.
+Statisk web-app der hjælper danske solcelleejere med at forstå deres eksport-økonomi — hvad de faktisk fik for den strøm de sendte ud på nettet, time for time, med fuld tarif-beregning.
 
 Alt processeres lokalt i browseren — ingen data forlader brugerens maskine.
 
@@ -17,7 +17,7 @@ Alt processeres lokalt i browseren — ingen data forlader brugerens maskine.
    - Energinets system + transmission + indfødnings + balancetariff
    - Statslig elafgift (varierer per periode)
    - Leverandørs markup (fra Strømligning, dato-aware)
-6. Appen beregner per-time `consumer_price = spot × 1,25 + tariffer × 1,25` og `netto_eksport = spot − fradrag`, finder dårlige timer, viser tabt fortjeneste
+6. Appen beregner per-time `netto_eksport = spot − fradrag` og viser resultater på **5 faner:** Oversigt (søjlediagram + fordeling + månedstabel), Timer under grænse, Alle eksportimer, Månedsoversigt, Afregnings-validering og Elforbrug-validering
 
 ## Arkitektur
 

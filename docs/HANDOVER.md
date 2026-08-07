@@ -1,6 +1,6 @@
 # Handover-dokument — Solcelle Eksport-Analyse
 
-**Sidst opdateret:** 2026-07-03
+**Sidst opdateret:** 2026-08-07
 **Repo:** https://github.com/marurup/solarProductionAnalyzer
 **Live:** https://marurup.github.io/solarProductionAnalyzer/
 
@@ -27,8 +27,16 @@ Dette dokument beskriver hele projektets nuværende tilstand, så arbejdet kan f
 - **Per-time tariff-analyse:**
   - `analyze()` slår op for hver CSV-time i `state.tariffData` (loaded ved konfig + page-load)
   - `lookupHourlyComponents()`: distribution (per hour-of-day), systemtarif, transmissionsnettarif, elafgift, markup (forbrugsside) + Energinet indfødning + balance + supplier indfødning (eksportside)
-  - Formel: `selvforbrugsværdi = spot × 1,25 + tariffer × 1,25`
+  - Eksport-formel: `netto_eksport = spot − (Energinet balance + indfødning + netselskab indfødning) × 1,25 − t4`
+  - Forbrug-formel (til Elforbrug-validering): `forbrugspris = spot × 1,25 + tariffer × 1,25`
   - Fallback til manuelle felter (`t1`..`t4`, `selfConsumpOverhead`) hvis tariff-data ikke tilgængelig for valgt supplier
+- **Analyse-resultater — 5 faner:**
+  - **Oversigt** (default): søjlediagram over månedlig eksport-indkomst, fordelt på 4 kategorier (god/lav/dårlig/negativ pris), månedstabel med indkomst + timerfordeling + "Betalt for eksport", KPI-grid med nøgletal
+  - **Timer under grænse**: filtreret tabel med kun timer under grænseværdien (sortérbar)
+  - **Alle eksportimer**: komplet tabel over alle eksportimer, nyeste øverst, farvekodet
+  - **Månedsoversigt**: aggregeret månedstabel
+  - **Afregnings-validering** + **Elforbrug-validering**: se eksisterende beskrivelse
+- **4-delt kategori-system** i oversigten: god pris (grøn) · lav pris/advarsel (amber) · dårlig men positiv (orange) · negativ pris (rød). Hver har eget badge + tabel-farve. Baggrund: negativ pris = man *betaler* for at eksportere; dårlig = man tjener lidt, men under grænseværdien. Kæmpe praktisk forskel.
 - **Status-side** (`status.html`):
   - IndexedDB-cache: dage per prisområde
   - Statiske månedsfiler: liste + datointerval
@@ -81,10 +89,12 @@ Dette dokument beskriver hele projektets nuværende tilstand, så arbejdet kan f
 - **Energinet 2019 og tidligere** mangler i `data/constants/energinet.json`. EDS har historik længere tilbage — udvid `fetch-energinet.mjs` til at hente mere.
 
 ### Nye features (implementeret)
-- ✅ **Produktionsaftager-dropdown** — i Salg-panelet en `<select id="aftagerSelect">` over kendte elhandlere der køber overskudsstrøm; valg udfylder `t4` (elhandlerens spread/gebyr på produktionen, oven i de regulerede tariffer appen selv henter fra EDS) og viser note med **kilde, direkte link til prissiden (`se aktuel pris ↗`) og tjek-dato**. "— Indtast selv —" lader brugeren skrive selv; manuel redigering af t4 nulstiller valget. Fejler fetch, forbliver dropdown'en kun "Indtast selv" med en fejl-note.
-  - **Listen er en separat datafil: `data/produktionsaftagere.json`** (hentes med `fetch(..., {cache:'no-cache'})`) — nem at vedligeholde uden at røre `index.html`. Felter pr. post: `navn`, `spread` (øre/kWh = t4; `null` = ukendt → udfylder ikke t4, viser kun link), `note`, `kilde`, `url`, `opdateret`. Global `opdateret`-dato vises i UI-disclaimeren ("sidst opdateret …"). Ret dato pr. post + globalt når tal verificeres.
-  - **Kun kilde-bakkede tal** (ingen opdigtede gebyrer). Aktuelle poster (research/verificeret 2026-08): Vindstød 1 øre (egen afregning, 20 mdr) · Norlys 0/0,80 øre · Modstrøm 0 øre (elkunde)/5 øre (kun produktion) · Andel 3 øre · SEF 3,75 øre · NRGi 4 øre handelstillæg ekskl. moms (+ ~1,9 øre balanceomkostning noteret). Kilder: norlys.dk, modstroem.dk, andelenergi.dk, sefenergi.dk, nrgi.dk.
-  - **Udvidelse:** tilføj flere selskaber (EWII m.fl.) i JSON'en efterhånden som vilkår verificeres. Model dækker p.t. fast øre/kWh-spread; % af spot og produktions-abonnement (revenueAbon) kunne tilføjes.
+- ✅ **Produktionsaftager-dropdown** — i Salg-panelet en `<select id="aftagerSelect">` over kendte elhandlere der køber overskudsstrøm; valg udfylder `t4` og viser note med abonnement, kilde, link og tjek-dato. "— Indtast selv —" lader brugeren skrive selv.
+  - **Listen er en separat datafil: `data/produktionsaftagere.json`** (hentes med `fetch(..., {cache:'no-cache'})`). Felter pr. post: `navn`, `kategori` (`"alene"` = tegnes uanset elselskab, `"elkunde"` = kræver kundeforhold), `spread` (øre/kWh = t4; `null` = ukendt), `abonnement` (kr/md; 0 = gratis), `note`, `kilde`, `url`, `opdateret`.
+  - **Dropdown opdelt i to `<optgroup>`:** "Produktionsaftale alene" og "Kræver/forudsætter elkunde hos selskabet".
+  - **20 selskaber verificeret (2026-08):** Vindstød, Norlys, Modstrøm, Andel, SEF, NRGi, Green Power Energy, Jysk Energi, nef Strøm, Energy Nordic, Energi Fyn, Nordisk Energi — de fleste med både elkunde- og ren-produktions-variant. Nettopower udeladt (konkurs).
+  - **Status-siden** (`status.html`) viser hele listen som en tabel opdelt i de to kategorier.
+  - **Kun kilde-bakkede tal.** Se vedligeholdelses-procedure i afsnit 3.
 - ✅ **Trin-omstrukturering (1, 1½, 2 → 1, 2, 3)** — det tidligere ulogiske "trin 1½" (adresse-quick-konfig som eget kort) er fjernet. Ny inddeling: **1 Importér data · 2 Sæt tariffer (køb + salg) · 3 Analysér.** Trin 2 er internt delt i **tre parallelle paneler** (`.config-part`): **(1) Netselskab & område** — fælles for køb og salg (netselskabet står for transporten og opkræver tariffer begge veje; udfyldes via adresse; prisområde flyttet herind da det følger postnummeret), **(2) Køb** — selvforbrugs-overhead, **(3) Salg** — eksport-fradrag (EDS + leverandørgebyr). Grænseværdier ligger som afsluttende analyse-indstillinger under de tre. Rene DOM-flytninger + én CSS-klasse, ingen JS-ændringer, alle element-ID'er bevaret.
 - ✅ **Validér produktionsafregning** — Tab "Afregnings-validering": per-måned breakdown af spotindtægt brutto, fradrag (Energinet balance + indfødning, netselskab indfødning, leverandørgebyr) og beregnet netto. Brugeren taster faktisk udbetaling → difference med farvemarkering. Klikbar fradragsdetalje per måned når per-time tariff-data er aktiv. Beløb gemmes i localStorage.
 - ✅ **Validér elforbrug-regning** — Tab "Elforbrug-validering": analyserer D07-forbrugsdata per time (spot + alle forbrugstariffer inkl. moms). Faste abonnements-gebyrer (netselskab + elselskab, kr/md inkl. moms) lægges til beregnet månedstotal. Brugeren taster faktisk regning → difference. Klikbar komponent-breakdown (spot, nettarif, Energinet system/transmission, elafgift, leverandørtillæg) når per-time data er aktiv. Spotpris-hentning dækker nu begge dataintervaller hvis eksport og forbrug har forskellig rækkevidde.
@@ -219,10 +229,12 @@ npm install      # kun papaparse (devDep), til test/parse-check.mjs
 - **Vanilla JS, ingen build-step** — for at holde det simpelt og gennemskueligt
 - **Statisk JSON i repo som data-lag** — løser CORS og rate-limit, gør data versioneret og inspicerbart
 - **Strømligning til auto-detect, EDS til faktiske rates** — Strømligning kender netselskab fra koordinater (har ingen historiske rates), EDS DatahubPricelist har komplet historik (men kan ikke fetches fra browseren)
-- **Per-time analyse via lookup, ikke ved aggregeret gennemsnit** — distribution varierer fra 11 til 79 øre over døgnet (4-7×), så gennemsnit ville gøre "tabt fortjeneste"-beregningen forkert
+- **Per-time analyse via lookup, ikke ved aggregeret gennemsnit** — distribution varierer fra 11 til 79 øre over døgnet (4-7×), så gennemsnit ville give forkerte resultater
 - **Markup beholdes i sessionStorage** — det er per produkt og kunne ændre sig, men hentes friskt fra Strømligning ved hver page-load via `cachedJson()` med 24t TTL
 - **Spot fra EDS, ikke fra Strømligning** — vi vil ikke blande spot fra flere kilder; én autoritativ kilde (Nord Pool via EDS)
 - **Ingen elafgift hardcoded** — EDS er autoritativ (vi fandt fejl i vores oprindelige hardcoded historik for 2022/2023)
+- **Selvforbrugsværdi og "tabt fortjeneste" fjernet (2026-08)** — eloverblik viser kun netto-import (D07) og netto-eksport (D06), ikke hvad der faktisk blev forbrugt bag måleren. En bruger med batteri + elbil har allerede optimeret selvforbrug; det eksporterede er ægte overskud. "Tabt fortjeneste" (= hvad man kunne have tjent ved selvforbrug) var et skyggetal baseret på en forkert antagelse og er fjernet helt. Actionabelt fokus: *negativ pris* (man betaler for at eksportere) er det eneste reelt handlebare.
+- **Positiv-framing af analyse (2026-08)** — bruger lander nu på "Oversigt"-fanen med søjlediagram og fordeling af alle eksportimer. "Problematiske timer" omdøbt til "Timer under grænse". 4 kategorier (god/lav/dårlig/negativ) i stedet for binær god/dårlig.
 
 ## 7. Kontakt-info
 
