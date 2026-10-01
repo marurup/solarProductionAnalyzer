@@ -1,7 +1,7 @@
 {
   "_meta": {
     "description": "Strømligning supplier_id → EDS GLN + ChargeTypeCode. consumptionCode = nettarif på forbrugs-siden. indfodningCode = nettarif på eksport-siden (kan være B-rate hvis netselskab ikke har separat C-kode).",
-    "generatedAt": "2026-09-01T09:55:41.852Z",
+    "generatedAt": "2026-10-01T11:30:52.819Z",
     "supplierCount": 35
   },
   "suppliers": {
@@ -187,7 +187,7 @@
       "indfodningCode": "TNT15013",
       "indfodningNote": "C-spec",
       "companyName": "Midtfyns Elforsyning A.m.b.A",
-      "match": "exact"
+      "match": "fuzzy"
     },
     "n1_c": {
       "gln": "5790001089030",
