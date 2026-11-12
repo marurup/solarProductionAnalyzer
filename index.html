@@ -3407,6 +3407,23 @@ updateExportDeductionUI();
   const t4 = document.getElementById('t4');
   if (!sel || !note || !t4) return;
 
+  // Gemte værdier (t4 + aftagepligt) gendannes efter fetch'en, så alle
+  // input/change-lyttere i resten af scriptet er registreret og UI'et opdateres.
+  const aftagepligt = document.getElementById('aftagepligt');
+  const restoreFields = () => {
+    const cfg = loadConfig();
+    if (cfg.t4 != null && cfg.t4 !== '' && !isNaN(+cfg.t4)) {
+      t4.value = cfg.t4;
+      t4.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    if (aftagepligt && typeof cfg.aftagepligt === 'boolean' && aftagepligt.checked !== cfg.aftagepligt) {
+      aftagepligt.checked = cfg.aftagepligt;
+      aftagepligt.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  };
+  t4.addEventListener('input', () => saveConfig({ t4: t4.value }));
+  aftagepligt?.addEventListener('change', () => saveConfig({ aftagepligt: aftagepligt.checked }));
+
   let liste = [];
   try {
     const resp = await fetch('data/produktionsaftagere.json', { cache: 'no-cache' });
@@ -3418,6 +3435,7 @@ updateExportDeductionUI();
     }
   } catch (e) {
     if (disc) disc.textContent = '⚠ Kunne ikke indlæse elhandler-listen — indtast gebyret manuelt nedenfor.';
+    restoreFields();
     return; // dropdown forbliver kun "Indtast selv"
   }
 
@@ -3452,6 +3470,7 @@ updateExportDeductionUI();
 
   sel.addEventListener('change', () => {
     const a = selected();
+    saveConfig({ aftagerNavn: a ? a.navn : null });
     if (a && a.spread != null) {
       t4.value = a.spread;
       t4.dispatchEvent(new Event('input', { bubbles: true }));
@@ -3462,8 +3481,26 @@ updateExportDeductionUI();
   // Manuel redigering af t4 nulstiller valget til "Indtast selv".
   t4.addEventListener('input', () => {
     const a = selected();
-    if (a && a.spread != null && +t4.value !== Number(a.spread)) { sel.value = ''; showNote(null); }
+    if (a && a.spread != null && +t4.value !== Number(a.spread)) {
+      sel.value = ''; showNote(null); saveConfig({ aftagerNavn: null });
+    }
   });
+
+  // Gendan gemt elhandler (matches på navn, så listen gerne må ændre rækkefølge).
+  // Det gemte gebyr vinder: har listen fået en anden pris siden, beholdes brugerens
+  // tal, og valget står som "Indtast selv" med en note om den nye pris.
+  restoreFields();
+  const cfg = loadConfig();
+  const idx = cfg.aftagerNavn ? liste.findIndex(a => a.navn === cfg.aftagerNavn) : -1;
+  if (idx >= 0) {
+    const a = liste[idx];
+    if (a.spread == null || +t4.value === Number(a.spread)) {
+      sel.value = String(idx);
+      showNote(a);
+    } else {
+      note.textContent = `Gemt valg: ${a.navn}. Listen angiver nu ${Number(a.spread).toLocaleString('da-DK')} øre/kWh (dit gemte gebyr er ${(+t4.value).toLocaleString('da-DK')}). Vælg elhandleren igen for at bruge listens pris.`;
+    }
+  }
 })();
 
 // Break-even: spotprisen hvor netto = 0 = dine samlede fradrag i dag (øre/kWh inkl. moms + t4).
