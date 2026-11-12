@@ -224,6 +224,42 @@
     .dist-bar { display: flex; border-radius: 4px; overflow: hidden; height: 18px; margin: 6px 0; background: var(--border); }
     .dist-segment { height: 100%; }
 
+    /* Inverter-upload (trin 1) */
+    .inverter-part { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border); }
+    .inverter-sources { border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; background: var(--bg); }
+    .source-list { list-style: none; font-size: 0.8rem; line-height: 1.45; }
+    .source-list li { padding: 5px 0; border-top: 1px solid rgba(42,45,58,0.6); }
+    .source-list li:first-child { border-top: none; }
+    .source-list .src-planned { color: var(--muted); }
+    .source-list .src-tag { font-size: 0.68rem; border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; margin-left: 4px; color: var(--muted); }
+
+    /* Besparelses-grafer (inline SVG). Serie-farver valideret for CVD mod #1a1d27. */
+    .viz-wrap { position: relative; width: 100%; }
+    .viz-wrap svg { display: block; width: 100%; height: auto; overflow: visible; }
+    .viz-wrap .axis-text { fill: var(--muted); font-size: 11px; }
+    .viz-wrap .grid-line { stroke: var(--border); stroke-width: 1; }
+    .viz-wrap .zero-line { stroke: var(--muted); stroke-width: 1; }
+    .viz-wrap .hit { fill: transparent; cursor: default; }
+    .viz-wrap .hit:hover { fill: rgba(255,255,255,0.04); }
+    .viz-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 0.78rem; color: var(--muted); margin-bottom: 8px; }
+    .viz-legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+    .viz-tip {
+      position: fixed; z-index: 60; pointer-events: none; display: none;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+      padding: 8px 10px; font-size: 0.78rem; color: var(--text); line-height: 1.5;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.45); min-width: 160px;
+    }
+    .viz-tip .tip-row { display: flex; justify-content: space-between; gap: 14px; }
+    .viz-tip .tip-row span:first-child { color: var(--muted); }
+    .viz-tip .tip-title { font-weight: 600; margin-bottom: 4px; }
+    :root {
+      --s-sol: #c98500;       /* sol / direkte selvforbrug */
+      --s-surplus: #199e70;   /* overskud (salgsværdi) */
+      --s-battery: #3987e5;   /* batteri */
+      --s-grid: #d55181;      /* net */
+      --s-residual: #6b7280;  /* afvigelse (neutral) */
+    }
+
     /* Debug log */
     .debug-log {
       background: var(--bg);
@@ -358,6 +394,26 @@
       <button class="btn" id="btnSelectMeter">Bekræft valg</button>
     </div>
     <p id="meterHint" style="font-size:0.78rem; color:var(--muted); margin-top:6px;"></p>
+  </div>
+
+  <!-- Inverter-data (energiflow-CSV) — valgfri, giver besparelses-analysen -->
+  <div class="inverter-part">
+    <h3>Valgfrit: inverter-data <span style="color:var(--muted); font-size:0.78rem; font-weight:400; text-transform:none; letter-spacing:0">— til besparelses-analyse</span></h3>
+    <p style="margin-bottom:12px">eloverblik ser kun hvad der passerer elmåleren. Inverteren ved hvad solcellerne lavede, hvad huset brugte, og hvornår batteriet blev ladet og brugt. Det skal der til for at regne den <strong style="color:var(--text)">faktiske besparelse</strong> ud, inklusive batteriets værdi, fx når det lades billigt om natten og bruges om dagen.</p>
+    <div class="upload-grid">
+      <div class="drop-zone" id="dropInverter" onclick="document.getElementById('fileInverter').click()">
+        <div class="drop-icon">🔋</div>
+        <div class="drop-label">Inverter-data (energiflow-CSV)</div>
+        <div class="drop-hint">PV, forbrug, batteri og net pr. 5 min–1 time</div>
+        <div class="drop-status" id="statusInverter" style="display:none"></div>
+        <input type="file" id="fileInverter" accept=".csv,.txt">
+      </div>
+      <div class="inverter-sources">
+        <div style="font-size:0.85rem; font-weight:600; margin-bottom:6px;">Sådan får du data ud af din inverter</div>
+        <p style="font-size:0.8rem; margin-bottom:8px; line-height:1.5">Appen henter ikke selv fra invertere. Små, separate eksportører gør det og skriver filen i det åbne <a href="https://github.com/marurup/solarProductionAnalyzer/blob/main/docs/energiflow-format.md" target="_blank" rel="noopener" style="color:var(--accent)">energiflow-format</a>.</p>
+        <ul id="inverterSourceList" class="source-list"><li style="color:var(--muted)">Indlæser liste…</li></ul>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -539,6 +595,7 @@
       <div class="tab" data-tab="monthly">Månedsoversigt</div>
       <div class="tab" data-tab="revenue">Afregnings-validering</div>
       <div class="tab" data-tab="bill">Elforbrug-validering</div>
+      <div class="tab" data-tab="savings" id="tabSavingsBtn" style="display:none">Besparelse</div>
     </div>
 
     <div class="tab-content active" id="tab-overview">
@@ -730,6 +787,67 @@
       </div>
     </div>
 
+    <div class="tab-content" id="tab-savings">
+      <p style="margin-bottom:16px; font-size:0.85rem; line-height:1.6">
+        Hvad har solceller og batteri sparet? Time for time sammenlignes hvad husets forbrug <em>ville</em> have kostet uden anlæg (forbrug × købspris) med hvad det <em>faktisk</em> kostede (køb − salg), med samme købs- og salgspriser som de øvrige faner.
+        Net-tallene kommer fra elmåleren (eloverblik), hvor de findes, ellers fra inverteren. Faste abonnementer er ikke med, fordi de betales under alle omstændigheder.
+      </p>
+      <div class="kpi-grid" id="savingsKpis"></div>
+
+      <div style="margin-bottom:28px">
+        <h3 style="margin-bottom:4px">Besparelse pr. måned</h3>
+        <p style="font-size:0.8rem; margin-bottom:10px">Posterne summerer til besparelsen. Batteriet kan være negativt i en måned, hvis det har kostet mere at lade end strømmen var værd, da den blev brugt.</p>
+        <div class="viz-legend" id="savingsLegend"></div>
+        <div id="savingsChart" class="viz-wrap"></div>
+      </div>
+
+      <div style="margin-bottom:28px">
+        <div class="row" style="margin-bottom:4px">
+          <h3 style="margin:0">Døgnprofil</h3>
+          <div class="spacer"></div>
+          <label for="profileMonth" style="font-size:0.8rem; color:var(--muted)">Måned</label>
+          <select id="profileMonth"></select>
+        </div>
+        <p style="font-size:0.8rem; margin-bottom:10px">Gennemsnitligt døgn i måneden. Over aksen: hvor husets strøm kom fra. Under aksen: hvad batteriet blev ladet med. Prisen nedenunder viser hvorfor det kan betale sig at flytte strøm i tid.</p>
+        <div class="viz-legend" id="profileLegend"></div>
+        <div id="profileChart" class="viz-wrap"></div>
+        <div id="profilePriceChart" class="viz-wrap" style="margin-top:6px"></div>
+      </div>
+
+      <h3 style="margin-bottom:10px">Månedstabel</h3>
+      <div class="table-wrap">
+        <table id="savingsTable">
+          <thead>
+            <tr>
+              <th class="th-static">Måned</th>
+              <th class="th-static">Forbrug</th>
+              <th class="th-static">Sol</th>
+              <th class="th-static">Uden anlæg</th>
+              <th class="th-static">Faktisk</th>
+              <th class="th-static">Besparelse</th>
+              <th class="th-static">Direkte</th>
+              <th class="th-static">Overskud</th>
+              <th class="th-static">Batteri</th>
+              <th class="th-static">Afvigelse</th>
+              <th class="th-static">Net→batteri</th>
+              <th class="th-static" title="Inverterens net-tal sammenlignet med elmåleren i timer hvor begge findes">Inverter vs. måler</th>
+            </tr>
+          </thead>
+          <tbody id="savingsBody"></tbody>
+        </table>
+      </div>
+      <details class="col-help" style="margin-top:14px; background:var(--bg); border:1px solid var(--border); border-radius:8px; overflow:hidden;">
+        <summary style="cursor:pointer; padding:10px 14px; font-size:0.85rem; color:var(--accent); font-weight:500; user-select:none;">Sådan regnes besparelsen</summary>
+        <div style="padding:4px 14px 12px; font-size:0.85rem; color:var(--muted); line-height:1.6;">
+          <p style="margin:8px 0;">Hver time fordeles inverterens flows: solcellestrøm går først til huset, derefter til batteriet og til sidst til nettet. Batteriet dækker huset før nettet gør. Opladning ud over solcelleoverskuddet regnes som opladning fra nettet.</p>
+          <p style="margin:8px 0;"><strong style="color:var(--text)">Direkte</strong>: sol brugt i huset med det samme × købspris.</p>
+          <p style="margin:8px 0;"><strong style="color:var(--text)">Overskud</strong>: solcelleoverskud × salgspris, også den del der blev lagt på batteriet. Det er hvad den strøm kunne have indbragt ved salg.</p>
+          <p style="margin:8px 0;"><strong style="color:var(--text)">Batteri</strong>: værdien af batteristrøm, da den blev brugt (× købspris i den time), minus ladning fra nettet (× købspris dengang) og minus mistet salg af den sol der blev ladet. Batteriets tab er dermed indregnet.</p>
+          <p style="margin:8px 0;"><strong style="color:var(--text)">Afvigelse</strong>: forskellen mellem elmålerens og inverterens net-tal plus tab som fordelingen ikke fanger. Er den stor, så tjek afstemningen i sidste kolonne.</p>
+        </div>
+      </details>
+    </div>
+
   </div>
 </div>
 
@@ -876,6 +994,8 @@ const state = {
   showAllOverview: false,
   cache: new SpotPriceCache(),
   tariffData: null,   // {supplier, energinet, elafgift, markup} eller null hvis ikke aktiveret
+  inverter: null,     // parseEnergiflowCSV-resultat {rows, meta, stats} eller null
+  savings: null,      // analyzeSavings-resultat eller null
 };
 
 const log = (() => {
@@ -1120,6 +1240,182 @@ function rawToHourKey(raw) {
 }
 // ==PARSE_CORE_END==
 
+// ─── energiflow-CSV (inverter-data) ──────────────────────────────────────────
+// Åbent format for flows BAG elmåleren (PV, last, batteri, net) — se
+// docs/energiflow-format.md. Appen henter ikke selv fra invertere; separate
+// eksportører skriver denne fil (se data/energiflow-kilder.json).
+// ==INVERTER_PARSE_START== (test/energiflow-check.mjs udtrækker blokken — brug kun Papa + log udefra)
+
+// CSV-kolonne → internt feltnavn
+const ENERGIFLOW_FIELDS = {
+  pv_kwh: 'pv',
+  load_kwh: 'load',
+  battery_charge_kwh: 'batIn',
+  battery_discharge_kwh: 'batOut',
+  grid_import_kwh: 'gridIn',
+  grid_export_kwh: 'gridOut',
+  battery_charge_from_grid_kwh: 'batFromGrid',
+};
+const ENERGIFLOW_REQUIRED = ['pv_kwh', 'load_kwh'];
+
+const DK_HOUR_FMT = new Intl.DateTimeFormat('sv-SE', {
+  timeZone: 'Europe/Copenhagen', year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', hourCycle: 'h23',
+});
+
+// Date → "YYYY-MM-DDTHH" i dansk lokaltid (samme nøgle som spotpriser/eloverblik).
+function toDkHourKey(date) {
+  const p = {};
+  for (const part of DK_HOUR_FMT.formatToParts(date)) p[part.type] = part.value;
+  return `${p.year}-${p.month}-${p.day}T${p.hour}`;
+}
+
+// Tidsstempel → { hourKey, ms }. Med offset/Z: præcist via UTC. Uden offset:
+// dansk vægur-tid læses direkte fra strengen (tvetydig ved sommertidsskift).
+function energiflowTime(raw) {
+  const s = String(raw ?? '').trim();
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?\s*(Z|[+-]\d{2}:?\d{2})?$/i);
+  if (!m) return null;
+  const [, y, mo, d, h, mi, sec, tz] = m;
+  if (tz) {
+    const ms = Date.parse(`${y}-${mo}-${d}T${h}:${mi}:${sec || '00'}${tz.length === 5 ? tz.slice(0, 3) + ':' + tz.slice(3) : tz}`);
+    if (isNaN(ms)) return null;
+    return { hourKey: toDkHourKey(new Date(ms)), ms };
+  }
+  const ms = new Date(+y, +mo - 1, +d, +h, +mi).getTime();
+  return { hourKey: `${y}-${mo}-${d}T${h}`, ms };
+}
+
+function energiflowNumber(v, decimalComma) {
+  if (v == null) return null;
+  let s = String(v).trim();
+  if (s === '') return null;
+  // Semikolon-fil med decimalkomma ("1.234,5"); står der kun punktum, er det decimaltegnet
+  if (decimalComma && s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+  const n = Number(s);
+  return Number.isFinite(n) ? n : NaN;
+}
+
+// Parser energiflow-CSV → timerækker. Returnerer { error } ved ugyldig fil.
+// Hver time: { hourKey, timestamp, pv, load, batIn, batOut, gridIn, gridOut,
+// batFromGrid, soc } — null = ukendt (ingen intervaller havde en værdi).
+function parseEnergiflowCSV(text) {
+  const lines = String(text).replace(/^﻿/, '').split(/\r?\n/);
+  const meta = {};
+  const dataLines = [];
+  let sawHeaderComment = false;
+  for (const line of lines) {
+    if (line.trimStart().startsWith('#')) {
+      const c = line.replace(/^\s*#\s*/, '');
+      if (!sawHeaderComment) {
+        sawHeaderComment = true;
+        const parts = c.split(';').map(x => x.trim());
+        const ver = parts[0].match(/^energiflow\s+v(\d+)/i);
+        if (ver) meta.version = +ver[1];
+        for (const p of parts.slice(1)) {
+          const eq = p.indexOf('=');
+          if (eq > 0) meta[p.slice(0, eq).trim().toLowerCase()] = p.slice(eq + 1).trim();
+        }
+      }
+      continue;
+    }
+    if (line.trim() !== '') dataLines.push(line);
+  }
+  if (!dataLines.length) return { error: 'Filen er tom.' };
+
+  const headerLine = dataLines[0];
+  const delimiter = (headerLine.match(/;/g) || []).length > (headerLine.match(/,/g) || []).length ? ';' : ',';
+  const decimalComma = delimiter === ';';
+  const parsed = Papa.parse(dataLines.join('\n'), { header: true, delimiter, skipEmptyLines: true });
+  const headers = (parsed.meta.fields || []).map(h => h.trim().toLowerCase());
+  const rawHeaders = parsed.meta.fields || [];
+  const col = name => rawHeaders[headers.indexOf(name)];
+
+  if (!headers.includes('timestamp')) {
+    return { error: 'Kolonnen "timestamp" mangler. Er det en energiflow-CSV? Se docs/energiflow-format.md.' };
+  }
+  const missing = ENERGIFLOW_REQUIRED.filter(c => !headers.includes(c));
+  if (missing.length) return { error: `Påkrævede kolonner mangler: ${missing.join(', ')}` };
+  if (meta.version && meta.version > 1) log.warn(`energiflow: filen er version ${meta.version} — appen kender kun v1, ukendte felter ignoreres`);
+
+  const present = Object.keys(ENERGIFLOW_FIELDS).filter(c => headers.includes(c));
+  const hasSoc = headers.includes('battery_soc_pct');
+  const hours = new Map();
+  let badTime = 0, negatives = 0, badNumbers = 0, intervals = 0;
+
+  for (const r of parsed.data) {
+    const t = energiflowTime(r[col('timestamp')]);
+    if (!t) { badTime++; continue; }
+    intervals++;
+    let h = hours.get(t.hourKey);
+    if (!h) {
+      h = { hourKey: t.hourKey, ms: Infinity, lastMs: -Infinity, n: 0, soc: null };
+      for (const f of Object.values(ENERGIFLOW_FIELDS)) h[f] = null;
+      hours.set(t.hourKey, h);
+    }
+    h.n++;
+    // ms = første UTC-time i nøglen, lastMs = sidste (forskellige ved sommertids-skift i oktober,
+    // hvor to UTC-timer deler dansk nøgle "02")
+    const hourMs = Math.floor(t.ms / 3600000) * 3600000;
+    if (hourMs < h.ms) h.ms = hourMs;
+    if (hourMs > h.lastMs) h.lastMs = hourMs;
+    for (const c of present) {
+      const v = energiflowNumber(r[col(c)], decimalComma);
+      if (v === null) continue;
+      if (Number.isNaN(v)) { badNumbers++; continue; }
+      if (v < 0) { negatives++; continue; }
+      const f = ENERGIFLOW_FIELDS[c];
+      h[f] = (h[f] ?? 0) + v;
+    }
+    if (hasSoc) {
+      const s = energiflowNumber(r[col('battery_soc_pct')], decimalComma);
+      // Sidste interval i timen vinder (SOC ved timens slutning)
+      if (s !== null && !Number.isNaN(s) && t.ms >= (h.socMs ?? -Infinity)) { h.soc = s; h.socMs = t.ms; }
+    }
+  }
+
+  const sortedHours = [...hours.values()].sort((a, b) => a.ms - b.ms);
+  const rows = sortedHours.map(h => {
+    const out = { hourKey: h.hourKey, timestamp: new Date(h.ms) };
+    for (const f of Object.values(ENERGIFLOW_FIELDS)) out[f] = h[f];
+    out.soc = h.soc;
+    return out;
+  });
+  if (!rows.length) return { error: 'Ingen gyldige rækker — tjek at "timestamp" er ISO 8601, fx 2026-11-03T02:00:00+01:00.' };
+
+  // Huller: timer mellem første og sidste der ikke findes i filen
+  let gapHours = 0;
+  for (let i = 1; i < sortedHours.length; i++) {
+    const diff = Math.round((sortedHours[i].ms - sortedHours[i - 1].lastMs) / 3600000);
+    if (diff > 1) gapHours += diff - 1;
+  }
+
+  // Energibalance (kun timer hvor alle seks flows er kendt)
+  let balanceHours = 0, balanceAbs = 0, balanceLoad = 0;
+  for (const r of rows) {
+    if ([r.pv, r.load, r.batIn, r.batOut, r.gridIn, r.gridOut].some(v => v == null)) continue;
+    balanceHours++;
+    balanceAbs += Math.abs(r.pv + r.batOut + r.gridIn - r.load - r.batIn - r.gridOut);
+    balanceLoad += r.load;
+  }
+
+  if (badTime) log.warn(`energiflow: ${badTime} rækker med ugyldigt tidsstempel sprunget over`);
+  if (negatives) log.warn(`energiflow: ${negatives} negative værdier ignoreret (typisk tæller-nulstilling)`);
+  if (badNumbers) log.warn(`energiflow: ${badNumbers} celler var ikke tal — ignoreret`);
+  log.info(`energiflow: ${intervals} intervaller → ${rows.length} timer (${rows[0].hourKey} → ${rows[rows.length - 1].hourKey}), kolonner: ${present.join(', ')}`);
+
+  return {
+    rows, meta,
+    stats: {
+      intervals, hours: rows.length, gapHours, negatives, badTime,
+      columns: present.concat(hasSoc ? ['battery_soc_pct'] : []),
+      firstKey: rows[0].hourKey, lastKey: rows[rows.length - 1].hourKey,
+      balanceHours, balancePct: balanceLoad > 0 ? balanceAbs / balanceLoad * 100 : null,
+    },
+  };
+}
+// ==INVERTER_PARSE_END==
+
 // ─── Spotpriser (statisk cache + IndexedDB) ──────────────────────────────────
 // Sitet henter KUN fra data/prices/{area}/{YYYY-MM}.json — disse filer
 // vedligeholdes af GitHub Action (scripts/fetch-prices.mjs) der kører dagligt
@@ -1210,6 +1506,8 @@ function getTariffs() {
   };
 }
 
+// ==ANALYSIS_CORE_START== (test/energiflow-check.mjs udtrækker blokken — brug kun log udefra)
+
 // Find første record/range hvor validFrom <= dateStr < (validTo ?? infinity)
 function lookupByDate(items, dateStr) {
   for (const it of items) {
@@ -1269,11 +1567,45 @@ function lookupHourlyComponents(hourKey, tariffData) {
   return out;
 }
 
+// ─── Pris pr. time (fælles for eksport-, forbrugs- og besparelsesanalyse) ────
+// Én kilde til sandhed for formlerne — verificeret mod 20 mdr afregninger.
+
+const hasPerHourSellData = td => !!(td?.supplier && td?.energinet && td?.elafgift);
+const hasPerHourBuyData  = td => !!(td?.supplier?.consumption?.length && td?.energinet && td?.elafgift);
+
+// Salgspris (netto eksport) for én time i øre/kWh: spot − fradrag.
+// Returnerer { oere, c } hvor c = tarif-komponenter (kr/kWh ex moms) eller null i manuel mode.
+function sellPriceOere(hourKey, spotOere, tariffData, tariffs) {
+  if (hasPerHourSellData(tariffData)) {
+    const c = lookupHourlyComponents(hourKey, tariffData);
+    // Aftagepligt: fritaget for netselskabets indfødningstarif → nulstil den (også i per-time mode)
+    if (tariffs.aftagepligt) c.supplierIndfodning = 0;
+    // Eksportside: fradrag = Energinet balance + indfødning + netselskab indfødning (fra EDS) + evt. leverandørgebyr (t4)
+    const exportFradragExVatKr = c.energinetBalance + c.energinetIndfodning + c.supplierIndfodning;
+    const exportFradragOere = exportFradragExVatKr * 1.25 * 100 + tariffs.t4;
+    return { oere: spotOere - exportFradragOere, c };
+  }
+  return { oere: spotOere - (tariffs.t1 + tariffs.t2 + tariffs.t3 + tariffs.t4), c: null };
+}
+
+// Købspris for én time i øre/kWh INKL. moms: (spot + alle forbrugstariffer) × 1,25.
+// Returnerer { oere, c } — c som ovenfor. Manuel mode: spot × 1,25 + tariff-overhead.
+function buyPriceOere(hourKey, spotOere, tariffData, tariffs) {
+  if (hasPerHourBuyData(tariffData)) {
+    const c = lookupHourlyComponents(hourKey, tariffData);
+    const vat = 1.25;
+    const spotKr = spotOere / 100 * vat;
+    const kr = spotKr + (c.distribution + c.systemTariff + c.transmissionNetTariff + c.elafgift + c.markup) * vat;
+    return { oere: kr * 100, c };
+  }
+  // selfConsumpOverhead er i øre/kWh inkl. moms
+  return { oere: spotOere * 1.25 + tariffs.selfConsumpOverhead, c: null };
+}
+
 function analyze(exportRows, spotPrices, tariffs, tariffData) {
-  const manualFradrag = tariffs.t1 + tariffs.t2 + tariffs.t3 + tariffs.t4;
   const results = [];
 
-  const hasPerHourData = !!(tariffData?.supplier && tariffData?.energinet && tariffData?.elafgift);
+  const hasPerHourData = hasPerHourSellData(tariffData);
   let missingPrices = 0, incompleteRows = 0;
 
   for (const row of exportRows) {
@@ -1283,21 +1615,10 @@ function analyze(exportRows, spotPrices, tariffs, tariffData) {
 
     if (spotOere === undefined) { missingPrices++; continue; }
 
-    let nettoEksportOere;
-    let breakdown = null;
-    if (hasPerHourData) {
-      const c = lookupHourlyComponents(row.hourKey, tariffData);
-      if (!c.dataComplete) incompleteRows++;
-      // Aftagepligt: fritaget for netselskabets indfødningstarif → nulstil den (også i per-time mode)
-      if (tariffs.aftagepligt) c.supplierIndfodning = 0;
-      // Eksportside: fradrag = Energinet balance + indfødning + netselskab indfødning (fra EDS) + evt. leverandørgebyr (t4)
-      const exportFradragExVatKr = c.energinetBalance + c.energinetIndfodning + c.supplierIndfodning;
-      const exportFradragOere = exportFradragExVatKr * 1.25 * 100 + tariffs.t4;
-      nettoEksportOere = spotOere - exportFradragOere;
-      breakdown = c;
-    } else {
-      nettoEksportOere = spotOere - manualFradrag;
-    }
+    const sell = sellPriceOere(row.hourKey, spotOere, tariffData, tariffs);
+    const nettoEksportOere = sell.oere;
+    const breakdown = sell.c;
+    if (breakdown && !breakdown.dataComplete) incompleteRows++;
 
     // Timer med forsvindende lidt eksport (typisk måle-støj mellem inverter og
     // el-måler, fx 0,001 kWh) flagges ikke som problematiske.
@@ -1331,7 +1652,7 @@ function analyze(exportRows, spotPrices, tariffs, tariffData) {
 }
 
 function analyzeConsumption(forbrugRows, spotPrices, tariffData, tariffs) {
-  const hasPerHourData = !!(tariffData?.supplier?.consumption?.length && tariffData?.energinet && tariffData?.elafgift);
+  const hasPerHourData = hasPerHourBuyData(tariffData);
   const months = new Map();
   let missingPrices = 0, incompleteRows = 0;
 
@@ -1352,8 +1673,10 @@ function analyzeConsumption(forbrugRows, spotPrices, tariffData, tariffs) {
     const spotKr = spotOere / 100 * 1.25; // kr/kWh incl. moms
     m.spotCost += spotKr * row.kwh;
 
-    if (hasPerHourData) {
-      const c = lookupHourlyComponents(row.hourKey, tariffData);
+    const buy = buyPriceOere(row.hourKey, spotOere, tariffData, tariffs);
+    m.totalVariable += buy.oere / 100 * row.kwh;
+    if (buy.c) {
+      const c = buy.c;
       if (!c.dataComplete) incompleteRows++;
       const vat = 1.25;
       m.distribution += c.distribution         * vat * row.kwh;
@@ -1361,11 +1684,7 @@ function analyzeConsumption(forbrugRows, spotPrices, tariffData, tariffs) {
       m.transmission += c.transmissionNetTariff * vat * row.kwh;
       m.elafgift     += c.elafgift              * vat * row.kwh;
       m.markup       += c.markup                * vat * row.kwh;
-      m.totalVariable += (spotKr + (c.distribution + c.systemTariff + c.transmissionNetTariff + c.elafgift + c.markup) * vat) * row.kwh;
       m.hasBreakdown = true;
-    } else {
-      // selfConsumpOverhead er i øre/kWh inkl. moms
-      m.totalVariable += (spotOere * 1.25 + tariffs.selfConsumpOverhead) / 100 * row.kwh;
     }
   }
 
@@ -1374,6 +1693,113 @@ function analyzeConsumption(forbrugRows, spotPrices, tariffData, tariffs) {
   log.info(`Elforbrug-analyse: ${months.size} måneder (${hasPerHourData ? 'per-time tariff aktiv' : 'manuel tariff-overhead'})`);
   return months;
 }
+
+// ─── Besparelse (inverter-data) ──────────────────────────────────────────────
+// Fordeler hver times flows (PV først til huset, så batteri, så net; batteri
+// dækker huset før nettet) og værdisætter dem med samme købs-/salgspris som
+// resten af appen. Besparelse = hvad husets forbrug ville have kostet uden
+// anlæg − hvad det faktisk kostede netto (køb − salg).
+//
+// Opdeling (summerer eksakt til besparelsen):
+//   direct  = PV→hus × købspris
+//   surplus = (PV→net + PV→batteri) × salgspris   ← PV-overskuddets salgsværdi
+//   battery = batteri→hus × købspris + batteri→net × salgspris
+//             − net→batteri × købspris − PV→batteri × salgspris
+//   residual = resten: inverter-/batteritab der ikke er fanget af fordelingen
+//              + forskel mellem inverterens og elmålerens net-tal
+//
+// grid (valgfri) = { imp: Map<hourKey,kWh>, exp: Map<hourKey,kWh> } fra eloverblik
+// (D07/D06). Hvor en time findes i eloverblik, er den autoritativ for "faktisk".
+const SAVINGS_FLOWS = ['load', 'pv', 'pvToLoad', 'pvToBat', 'pvToGrid', 'gridToBat', 'gridToLoad', 'batToLoad', 'batToGrid',
+  'batIn', 'batOut', 'invGridIn', 'invGridOut', 'gridIn', 'gridOut', 'meterGridIn', 'meterGridOut', 'meterInvGridIn', 'meterInvGridOut'];
+const SAVINGS_KR = ['baseline', 'actual', 'savings', 'direct', 'surplus', 'battery', 'residual',
+  'gridToBatCost', 'pvToBatValue', 'batToLoadValue', 'batToGridValue'];
+
+function emptySavingsBucket() {
+  const b = { hours: 0, meterHours: 0, buyOereSum: 0, sellOereSum: 0 };
+  for (const k of SAVINGS_FLOWS) b[k] = 0;
+  for (const k of SAVINGS_KR) b[k] = 0;
+  return b;
+}
+
+function splitHourFlows(r) {
+  const pv = r.pv ?? 0, load = r.load, batIn = r.batIn ?? 0, batOut = r.batOut ?? 0;
+  const pvToLoad = Math.min(pv, load);
+  const surplus = Math.max(0, pv - load);
+  const pvToBat = r.batFromGrid != null
+    ? Math.min(surplus, Math.max(0, batIn - r.batFromGrid))
+    : Math.min(batIn, surplus);
+  const gridToBat = batIn - pvToBat;
+  const pvToGrid = surplus - pvToBat;
+  const batToLoad = Math.min(batOut, load - pvToLoad);
+  const batToGrid = batOut - batToLoad;
+  const gridToLoad = load - pvToLoad - batToLoad;
+  return {
+    load, pv, batIn, batOut, pvToLoad, pvToBat, pvToGrid, gridToBat, gridToLoad, batToLoad, batToGrid,
+    invGridIn: r.gridIn ?? (gridToLoad + gridToBat),
+    invGridOut: r.gridOut ?? (pvToGrid + batToGrid),
+  };
+}
+
+function analyzeSavings(invRows, spotPrices, tariffData, tariffs, grid) {
+  const total = emptySavingsBucket();
+  const months = new Map();
+  const profiles = new Map();   // "YYYY-MM" → 24 timer-på-døgnet buckets
+  let missingPrices = 0, skippedNoLoad = 0;
+
+  for (const r of invRows) {
+    if (r.load == null) { skippedNoLoad++; continue; }
+    const spotOere = spotPrices.get(r.hourKey);
+    if (spotOere === undefined) { missingPrices++; continue; }
+
+    const f = splitHourFlows(r);
+    const pb = buyPriceOere(r.hourKey, spotOere, tariffData, tariffs).oere / 100;   // kr/kWh
+    const ps = sellPriceOere(r.hourKey, spotOere, tariffData, tariffs).oere / 100;  // kr/kWh
+
+    // Kun timer hvor elmåleren dækker BEGGE retninger (fx er D06 ofte tilføjet senere end D07)
+    const hasMeter = !!grid && grid.imp.has(r.hourKey) && grid.exp.has(r.hourKey);
+    const gridIn  = hasMeter ? grid.imp.get(r.hourKey) : f.invGridIn;
+    const gridOut = hasMeter ? grid.exp.get(r.hourKey) : f.invGridOut;
+
+    const baseline = f.load * pb;
+    const actual = gridIn * pb - gridOut * ps;
+    const savings = baseline - actual;
+    const direct = f.pvToLoad * pb;
+    const surplus = (f.pvToGrid + f.pvToBat) * ps;
+    const gridToBatCost = f.gridToBat * pb;
+    const pvToBatValue = f.pvToBat * ps;
+    const batToLoadValue = f.batToLoad * pb;
+    const batToGridValue = f.batToGrid * ps;
+    const battery = batToLoadValue + batToGridValue - gridToBatCost - pvToBatValue;
+    const residual = savings - direct - surplus - battery;
+
+    const h = { ...f, gridIn, gridOut, baseline, actual, savings, direct, surplus, battery, residual,
+      gridToBatCost, pvToBatValue, batToLoadValue, batToGridValue };
+    const mKey = r.hourKey.slice(0, 7);
+    if (!months.has(mKey)) months.set(mKey, emptySavingsBucket());
+    if (!profiles.has(mKey)) profiles.set(mKey, Array.from({ length: 24 }, emptySavingsBucket));
+    const hod = parseInt(r.hourKey.slice(11, 13), 10);
+
+    for (const b of [total, months.get(mKey), profiles.get(mKey)[hod]]) {
+      b.hours++;
+      b.buyOereSum += pb * 100;
+      b.sellOereSum += ps * 100;
+      for (const k of SAVINGS_FLOWS) if (h[k] !== undefined) b[k] += h[k];
+      for (const k of SAVINGS_KR) b[k] += h[k];
+      if (hasMeter) {
+        b.meterHours++;
+        b.meterGridIn += gridIn; b.meterGridOut += gridOut;
+        b.meterInvGridIn += f.invGridIn; b.meterInvGridOut += f.invGridOut;
+      }
+    }
+  }
+
+  if (missingPrices) log.warn(`Besparelse: ${missingPrices} inverter-timer manglede spotpris — sprunget over`);
+  if (skippedNoLoad) log.warn(`Besparelse: ${skippedNoLoad} timer uden kendt forbrug (load_kwh) — sprunget over`);
+  log.info(`Besparelse: ${total.hours} timer, ${months.size} måneder, ${total.meterHours} timer med eloverblik-net`);
+  return { total, months, profiles };
+}
+// ==ANALYSIS_CORE_END==
 
 // ─── Rendering ────────────────────────────────────────────────────────────────
 
@@ -1405,6 +1831,10 @@ function renderResults(data, tariffs, { focus = true } = {}) {
     { label: 'Negative eksporttimer', value: negativeHours.length + ' timer', cls: negativeHours.length > 20 ? 'red' : negativeHours.length > 0 ? 'amber' : 'green' },
     { label: 'Timer under grænse', value: bad.length + ' timer', cls: bad.length > 50 ? 'red' : bad.length > 0 ? 'amber' : 'green' },
   ];
+  if (state.savings?.total.hours) {
+    const sv = state.savings.total.savings;
+    kpis.unshift({ label: 'Besparelse (sol + batteri)', value: fmtDKK(sv), cls: sv >= 0 ? 'green' : 'red' });
+  }
 
   document.getElementById('kpiGrid').innerHTML = kpis.map(k =>
     `<div class="kpi"><div class="kpi-label">${k.label}</div><div class="kpi-value ${k.cls}">${k.value}</div></div>`
@@ -1415,6 +1845,7 @@ function renderResults(data, tariffs, { focus = true } = {}) {
   renderMonthlyTable(data);
   renderRevenueValidation(data);
   renderBillValidation();
+  renderSavings();
   updateStepIndicator(3);
 }
 
@@ -1980,6 +2411,269 @@ function updateBillTotalsRow() {
 }
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
+
+// ─── Besparelse (rendering) ──────────────────────────────────────────────────
+
+const SAVINGS_SERIES = [
+  { key: 'direct',   label: 'Direkte selvforbrug',   color: 'var(--s-sol)' },
+  { key: 'surplus',  label: 'Overskud (salgsværdi)', color: 'var(--s-surplus)' },
+  { key: 'battery',  label: 'Batteri',               color: 'var(--s-battery)' },
+  { key: 'residual', label: 'Afvigelse',             color: 'var(--s-residual)' },
+];
+const MONTH_SHORT = ['Jan','Feb','Mar','Apr','Maj','Jun','Jul','Aug','Sep','Okt','Nov','Dec'];
+const fmtKrInt = v => (v < 0 ? '−' : '') + Math.abs(v).toLocaleString('da-DK', { maximumFractionDigits: 0 }) + ' kr';
+const fmtKr2 = v => (v < 0 ? '−' : '') + Math.abs(v).toLocaleString('da-DK', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' kr';
+const fmtKwh = (v, d = 0) => v.toLocaleString('da-DK', { minimumFractionDigits: d, maximumFractionDigits: d }) + ' kWh';
+const escHtml = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+
+function niceTicks(min, max, count = 4) {
+  const span = max - min || 1;
+  const raw = span / count;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= raw) || raw;
+  const ticks = [];
+  for (let v = Math.floor(min / step) * step; v <= max + step * 1e-9; v += step) ticks.push(+v.toFixed(10));
+  return ticks;
+}
+
+// Tooltip: hit-rektangler med data-tip="i" → tips[i] (HTML). Ét fælles tooltip-element.
+function bindVizTips(container, tips) {
+  let tip = document.getElementById('vizTip');
+  if (!tip) { tip = document.createElement('div'); tip.id = 'vizTip'; tip.className = 'viz-tip'; document.body.appendChild(tip); }
+  container.querySelectorAll('[data-tip]').forEach(el => {
+    el.addEventListener('mousemove', e => {
+      tip.innerHTML = tips[+el.dataset.tip];
+      tip.style.display = 'block';
+      const w = tip.offsetWidth, h = tip.offsetHeight;
+      let x = e.clientX + 14, y = e.clientY + 14;
+      if (x + w > window.innerWidth - 8) x = e.clientX - w - 14;
+      if (y + h > window.innerHeight - 8) y = e.clientY - h - 14;
+      tip.style.left = x + 'px'; tip.style.top = y + 'px';
+    });
+    el.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+  });
+}
+const tipRow = (label, value, color) =>
+  `<div class="tip-row"><span>${color ? `<i class="sw" style="display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px;background:${color}"></i>` : ''}${label}</span><span>${value}</span></div>`;
+
+function renderLegend(el, series, extra = '') {
+  el.innerHTML = series.map(s => `<span><span class="sw" style="background:${s.color}"></span>${s.label}</span>`).join('') + extra;
+}
+
+// Divergerende stablet søjlediagram: kolonner × serier, positive op, negative ned.
+// cols: [{ label, sub, values: {key: number}, total?, tip }]
+function svgStackedBars({ cols, series, height = 220, fmtAxis, totalLabel }) {
+  const W = 900, padL = 56, padR = 8, padT = totalLabel ? 18 : 8, padB = 34;
+  const plotW = W - padL - padR, plotH = height - padT - padB;
+  let pos = 0, neg = 0;
+  for (const c of cols) {
+    let p = 0, n = 0;
+    for (const s of series) { const v = c.values[s.key] || 0; if (v > 0) p += v; else n += v; }
+    pos = Math.max(pos, p); neg = Math.min(neg, n);
+  }
+  if (pos === 0 && neg === 0) pos = 1;
+  const ticks = niceTicks(neg, pos);
+  const yMin = Math.min(neg, ticks[0]), yMax = Math.max(pos, ticks[ticks.length - 1]);
+  const y = v => padT + (yMax - v) / (yMax - yMin) * plotH;
+  const slot = plotW / cols.length;
+  const bw = Math.max(3, Math.min(36, slot * 0.62));
+  const GAP = 2;
+
+  let out = `<svg viewBox="0 0 ${W} ${height}" role="img">`;
+  for (const t of ticks) {
+    out += `<line class="${t === 0 ? 'zero-line' : 'grid-line'}" x1="${padL}" x2="${W - padR}" y1="${y(t)}" y2="${y(t)}"/>`;
+    out += `<text class="axis-text" x="${padL - 6}" y="${y(t) + 4}" text-anchor="end">${fmtAxis(t)}</text>`;
+  }
+  if (!ticks.includes(0)) out += `<line class="zero-line" x1="${padL}" x2="${W - padR}" y1="${y(0)}" y2="${y(0)}"/>`;
+
+  const labelEvery = Math.ceil(cols.length / (plotW / 34));
+  cols.forEach((c, i) => {
+    const cx = padL + slot * i + slot / 2, x = cx - bw / 2;
+    let up = 0, down = 0;
+    const ups = [], downs = [];
+    for (const s of series) {
+      const v = c.values[s.key] || 0;
+      if (v > 0) { ups.push({ s, y0: up, y1: up + v }); up += v; }
+      else if (v < 0) { downs.push({ s, y0: down, y1: down + v }); down += v; }
+    }
+    // Segmenter med 2px mellemrum; yderste ende afrundet (4px) — forankret i nul-linjen
+    const draw = (segs, dir) => segs.forEach((g, k) => {
+      const top = y(dir > 0 ? g.y1 : g.y0), bot = y(dir > 0 ? g.y0 : g.y1);
+      let h = bot - top - (k > 0 ? GAP : 0);
+      const yy = dir > 0 ? top : top + (k > 0 ? GAP : 0);
+      if (h < 0.5) return;
+      const outer = k === segs.length - 1, r = outer ? Math.min(4, h / 2, bw / 2) : 0;
+      if (r > 0) {
+        const p = dir > 0
+          ? `M${x},${yy + h} V${yy + r} Q${x},${yy} ${x + r},${yy} H${x + bw - r} Q${x + bw},${yy} ${x + bw},${yy + r} V${yy + h} Z`
+          : `M${x},${yy} V${yy + h - r} Q${x},${yy + h} ${x + r},${yy + h} H${x + bw - r} Q${x + bw},${yy + h} ${x + bw},${yy + h - r} V${yy} Z`;
+        out += `<path d="${p}" fill="${g.s.color}"/>`;
+      } else out += `<rect x="${x}" y="${yy}" width="${bw}" height="${h}" fill="${g.s.color}"/>`;
+    });
+    draw(ups, 1); draw(downs, -1);
+    if (totalLabel && c.total != null) {
+      out += `<text class="axis-text" x="${cx}" y="${y(Math.max(up, 0)) - 5}" text-anchor="middle" style="fill:var(--text);font-weight:600">${totalLabel(c.total)}</text>`;
+    }
+    if (i % labelEvery === 0) {
+      out += `<text class="axis-text" x="${cx}" y="${height - padB + 14}" text-anchor="middle">${c.label}</text>`;
+      if (c.sub) out += `<text class="axis-text" x="${cx}" y="${height - padB + 26}" text-anchor="middle">${c.sub}</text>`;
+    }
+    out += `<rect class="hit" data-tip="${i}" x="${padL + slot * i}" y="${padT}" width="${slot}" height="${plotH}"/>`;
+  });
+  return out + '</svg>';
+}
+
+// Enkelt linje (én serie) over 24 kolonner — samme x-akse som døgnprofilen.
+function svgHourLine({ values, color, height = 110, fmtAxis, tips }) {
+  const W = 900, padL = 56, padR = 8, padT = 8, padB = 22;
+  const plotW = W - padL - padR, plotH = height - padT - padB;
+  const vals = values.filter(v => v != null);
+  if (!vals.length) return '';
+  const ticks = niceTicks(Math.min(0, ...vals), Math.max(...vals), 3);
+  const yMin = ticks[0], yMax = ticks[ticks.length - 1];
+  const y = v => padT + (yMax - v) / (yMax - yMin || 1) * plotH;
+  const slot = plotW / values.length;
+  const cx = i => padL + slot * i + slot / 2;
+  let out = `<svg viewBox="0 0 ${W} ${height}" role="img">`;
+  for (const t of ticks) {
+    out += `<line class="${t === 0 ? 'zero-line' : 'grid-line'}" x1="${padL}" x2="${W - padR}" y1="${y(t)}" y2="${y(t)}"/>`;
+    out += `<text class="axis-text" x="${padL - 6}" y="${y(t) + 4}" text-anchor="end">${fmtAxis(t)}</text>`;
+  }
+  const pts = values.map((v, i) => v == null ? null : `${cx(i)},${y(v)}`).filter(Boolean);
+  out += `<polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>`;
+  values.forEach((v, i) => {
+    if (v != null) out += `<circle cx="${cx(i)}" cy="${y(v)}" r="4" fill="${color}" stroke="var(--surface)" stroke-width="2"/>`;
+    if (i % 3 === 0) out += `<text class="axis-text" x="${cx(i)}" y="${height - 6}" text-anchor="middle">${String(i).padStart(2, '0')}</text>`;
+    out += `<rect class="hit" data-tip="${i}" x="${padL + slot * i}" y="${padT}" width="${slot}" height="${plotH}"/>`;
+  });
+  return out + '</svg>';
+}
+
+function renderSavings() {
+  const tabBtn = document.getElementById('tabSavingsBtn');
+  const s = state.savings;
+  if (!s || !s.total.hours) {
+    tabBtn.style.display = 'none';
+    if (tabBtn.classList.contains('active')) document.querySelector('.tab[data-tab="overview"]').click();
+    return;
+  }
+  tabBtn.style.display = '';
+  const t = s.total;
+  const months = [...s.months.entries()].sort(([a], [b]) => a.localeCompare(b));
+
+  // KPI'er
+  const chargeCost = t.batIn > 0 ? (t.gridToBatCost + t.pvToBatValue) / t.batIn : null;
+  const dischargeValue = t.batOut > 0 ? (t.batToLoadValue + t.batToGridValue) / t.batOut : null;
+  const period = `${months[0][0]} → ${months[months.length - 1][0]}`;
+  const kpis = [
+    { label: 'Besparelse i alt', value: fmtKrInt(t.savings), cls: t.savings >= 0 ? 'green' : 'red',
+      sub: `${period} · uden anlæg ${fmtKrInt(t.baseline)}, faktisk ${fmtKrInt(t.actual)}` },
+    { label: 'Direkte selvforbrug', value: fmtKrInt(t.direct), sub: `${fmtKwh(t.pvToLoad)} sol brugt med det samme` },
+    { label: 'Overskud (salgsværdi)', value: fmtKrInt(t.surplus), sub: `${fmtKwh(t.pvToGrid + t.pvToBat)} solcelleoverskud` },
+    { label: 'Batteri (tidsforskydning)', value: fmtKrInt(t.battery), cls: t.battery >= 0 ? 'green' : 'red',
+      sub: `${fmtKwh(t.gridToBat)} ladet fra net · ${fmtKwh(t.pvToBat)} fra sol` },
+  ];
+  if (chargeCost != null && dischargeValue != null) {
+    kpis.push({ label: 'Batteri: ladet → brugt', value: `${fmtKr2(chargeCost).replace(' kr', '')} → ${fmtKr2(dischargeValue)}`,
+      // ud/ind er kun virkningsgraden over lange perioder — over få dage dominerer ændringen i ladetilstand
+      sub: `kr/kWh i gns. · afladet/ladet ${(t.batOut / t.batIn * 100).toFixed(0)} %` });
+  }
+  document.getElementById('savingsKpis').innerHTML = kpis.map(k =>
+    `<div class="kpi"><div class="kpi-label">${k.label}</div><div class="kpi-value ${k.cls || ''}">${k.value}</div>` +
+    (k.sub ? `<div style="font-size:0.75rem;color:var(--muted);margin-top:4px">${k.sub}</div>` : '') + '</div>'
+  ).join('');
+
+  // Månedsgraf
+  renderLegend(document.getElementById('savingsLegend'), SAVINGS_SERIES,
+    '<span>· tal over søjlen = besparelse i alt</span>');
+  const monthTips = [];
+  const cols = months.map(([k, m], i) => {
+    const [yr, mo] = k.split('-');
+    monthTips[i] = `<div class="tip-title">${fmtMonth(k)}</div>` +
+      SAVINGS_SERIES.map(se => tipRow(se.label, fmtKr2(m[se.key]), se.color)).join('') +
+      `<div style="border-top:1px solid var(--border);margin:4px 0"></div>` + tipRow('Besparelse', fmtKr2(m.savings)) +
+      tipRow('Uden anlæg', fmtKr2(m.baseline)) + tipRow('Faktisk', fmtKr2(m.actual)) +
+      tipRow('Timer med data', m.hours.toLocaleString('da-DK'));
+    return { label: MONTH_SHORT[+mo - 1], sub: (mo === '01' || i === 0) ? yr : '', values: m, total: m.savings };
+  });
+  const chartEl = document.getElementById('savingsChart');
+  chartEl.innerHTML = svgStackedBars({ cols, series: SAVINGS_SERIES, height: 240,
+    fmtAxis: v => v.toLocaleString('da-DK') + ' kr', totalLabel: v => fmtKrInt(v).replace(' kr', '') });
+  bindVizTips(chartEl, monthTips);
+
+  // Døgnprofil — vælg måned (default seneste)
+  const sel = document.getElementById('profileMonth');
+  const prev = sel.value;
+  sel.innerHTML = months.map(([k]) => `<option value="${k}">${fmtMonth(k)}</option>`).join('');
+  sel.value = months.some(([k]) => k === prev) ? prev : months[months.length - 1][0];
+  sel.onchange = () => renderSavingsProfile(sel.value);
+  renderSavingsProfile(sel.value);
+
+  // Månedstabel
+  const pct = (a, b) => b > 0 ? ((a / b - 1) * 100) : null;
+  const fmtPct = v => v == null ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(1).replace('.', ',') + ' %';
+  const cell = (v, colorize) => `<td${colorize ? ` style="color:${v >= 0 ? 'var(--green)' : 'var(--red)'}"` : ''}>${fmtKr2(v)}</td>`;
+  const rowHtml = (label, m, bold) => {
+    const rec = m.meterHours
+      ? `<span title="${m.meterHours} timer med både inverter- og elmåler-data">ind ${fmtPct(pct(m.meterInvGridIn, m.meterGridIn))} · ud ${fmtPct(pct(m.meterInvGridOut, m.meterGridOut))}</span>`
+      : '<span style="color:var(--muted)">ingen elmåler-data</span>';
+    return `<tr${bold ? ' style="border-top:2px solid var(--border);font-weight:600"' : ''}>
+      <td>${label}</td><td>${fmtKwh(m.load)}</td><td>${fmtKwh(m.pv)}</td>
+      <td>${fmtKr2(m.baseline)}</td><td>${fmtKr2(m.actual)}</td>${cell(m.savings, true)}
+      <td>${fmtKr2(m.direct)}</td><td>${fmtKr2(m.surplus)}</td>${cell(m.battery, true)}
+      <td style="color:var(--muted)">${fmtKr2(m.residual)}</td><td>${fmtKwh(m.gridToBat, 1)}</td><td>${rec}</td>
+    </tr>`;
+  };
+  document.getElementById('savingsBody').innerHTML =
+    months.map(([k, m]) => rowHtml(fmtMonth(k), m)).join('') + rowHtml('I alt', t, true);
+}
+
+function renderSavingsProfile(monthKey) {
+  const buckets = state.savings?.profiles.get(monthKey);
+  if (!buckets) return;
+  const avg = (b, k) => b.hours ? b[k] / b.hours : 0;
+  const series = [
+    { key: 'sol',     label: 'Sol',     color: 'var(--s-sol)' },
+    { key: 'battery', label: 'Batteri', color: 'var(--s-battery)' },
+    { key: 'grid',    label: 'Net',     color: 'var(--s-grid)' },
+  ];
+  renderLegend(document.getElementById('profileLegend'), series,
+    '<span>· over aksen: husets forbrug dækket af … · under aksen: batteriet ladet med …</span>');
+  // Samme serie-nøgle bruges over (forbrug dækket af) og under (opladning fra) aksen
+  const stackSeries = [
+    { key: 'pvToLoad', color: series[0].color }, { key: 'batToLoad', color: series[1].color }, { key: 'gridToLoad', color: series[2].color },
+    { key: 'pvToBat', color: series[0].color }, { key: 'gridToBat', color: series[2].color },
+  ];
+  const tips = [];
+  const cols = buckets.map((b, h) => {
+    const v = {
+      pvToLoad: avg(b, 'pvToLoad'), batToLoad: avg(b, 'batToLoad'), gridToLoad: avg(b, 'gridToLoad'),
+      pvToBat: -avg(b, 'pvToBat'), gridToBat: -avg(b, 'gridToBat'),
+    };
+    const k = n => n.toLocaleString('da-DK', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' kWh';
+    tips[h] = `<div class="tip-title">kl. ${String(h).padStart(2, '0')}–${String((h + 1) % 24).padStart(2, '0')} · gns. ${b.hours} dage</div>` +
+      `<div style="color:var(--muted);margin:2px 0">Forbrug dækket af</div>` +
+      tipRow('Sol', k(v.pvToLoad), series[0].color) + tipRow('Batteri', k(v.batToLoad), series[1].color) + tipRow('Net', k(v.gridToLoad), series[2].color) +
+      `<div style="color:var(--muted);margin:2px 0">Batteri ladet med</div>` +
+      tipRow('Sol', k(-v.pvToBat), series[0].color) + tipRow('Net', k(-v.gridToBat), series[2].color) +
+      `<div style="border-top:1px solid var(--border);margin:4px 0"></div>` +
+      tipRow('Købspris', fmtKr2(b.hours ? b.buyOereSum / b.hours / 100 : 0) + '/kWh') +
+      tipRow('Salgspris', fmtKr2(b.hours ? b.sellOereSum / b.hours / 100 : 0) + '/kWh');
+    return { label: String(h).padStart(2, '0'), values: v };
+  });
+  const el = document.getElementById('profileChart');
+  el.innerHTML = svgStackedBars({ cols, series: stackSeries, height: 230,
+    fmtAxis: v => v.toLocaleString('da-DK', { maximumFractionDigits: 2 }) + ' kWh' });
+  bindVizTips(el, tips);
+
+  const priceEl = document.getElementById('profilePriceChart');
+  const prices = buckets.map(b => b.hours ? b.buyOereSum / b.hours / 100 : null);
+  priceEl.innerHTML = `<div style="font-size:0.78rem;color:var(--muted);margin:0 0 2px 56px">Gns. købspris (kr/kWh inkl. tariffer og moms)</div>` +
+    svgHourLine({ values: prices, color: 'var(--s-grid)', height: 110,
+      fmtAxis: v => v.toLocaleString('da-DK', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) });
+  bindVizTips(priceEl, prices.map((p, h) => `<div class="tip-title">kl. ${String(h).padStart(2, '0')}</div>` +
+    tipRow('Gns. købspris', p == null ? '—' : fmtKr2(p) + '/kWh')));
+}
 
 function fmtDKK(v) { return v.toFixed(2).replace('.', ',') + ' kr'; }
 function fmtDate(d) {
@@ -2815,11 +3509,11 @@ document.getElementById('btnBreakEven').addEventListener('click', () => {
 document.getElementById('aftagepligt').addEventListener('change', updateBreakEvenNote);
 updateBreakEvenNote();
 
-function setupDropZone(dropId, inputId, label, onLoad) {
+function setupDropZone(dropId, inputId, label, onLoad, handler = handleFile) {
   const drop = document.getElementById(dropId);
   const input = document.getElementById(inputId);
 
-  input.addEventListener('change', () => input.files[0] && handleFile(input.files[0], dropId, label, onLoad));
+  input.addEventListener('change', () => input.files[0] && handler(input.files[0], dropId, label, onLoad));
 
   drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('drag-over'); });
   drop.addEventListener('dragleave', () => drop.classList.remove('drag-over'));
@@ -2827,7 +3521,7 @@ function setupDropZone(dropId, inputId, label, onLoad) {
     e.preventDefault();
     drop.classList.remove('drag-over');
     const f = e.dataTransfer.files[0];
-    if (f) handleFile(f, dropId, label, onLoad);
+    if (f) handler(f, dropId, label, onLoad);
   });
 }
 
@@ -3073,9 +3767,92 @@ function handleFile(file, dropId, label, onLoad) {
 
 setupDropZone('dropExport', 'fileExport', 'Eksport', rows => { state.exportRows = rows; });
 setupDropZone('dropForbrug', 'fileForbrug', 'Forbrug', rows => { state.forbrugRows = rows; });
+setupDropZone('dropInverter', 'fileInverter', 'Inverter', null, handleInverterFile);
+
+const ENERGIFLOW_LABELS = {
+  pv_kwh: 'sol', load_kwh: 'forbrug', battery_charge_kwh: 'batteri ind', battery_discharge_kwh: 'batteri ud',
+  grid_import_kwh: 'net ind', grid_export_kwh: 'net ud', battery_charge_from_grid_kwh: 'net→batteri',
+  battery_soc_pct: 'SOC',
+};
+
+function handleInverterFile(file, dropId) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const parsed = parseEnergiflowCSV(e.target.result);
+    if (parsed.error) {
+      state.inverter = null;
+      showDropError(dropId, parsed.error);
+      checkReady();
+      return;
+    }
+    state.inverter = parsed;
+    const { stats, meta } = parsed;
+    const drop = document.getElementById(dropId);
+    drop.classList.add('loaded');
+    drop.classList.remove('error');
+    const statusEl = drop.querySelector('.drop-status');
+    statusEl.classList.remove('error');
+    statusEl.classList.add('summary');
+    statusEl.style.color = '';
+    statusEl.style.display = 'inline-block';
+    const lines = [
+      [`✓ ${stats.hours.toLocaleString('da-DK')} timer: ${stats.firstKey.slice(0, 10)} → ${stats.lastKey.slice(0, 10)}`, ''],
+      meta.source ? [`Kilde: ${meta.source}`, 'var(--muted)'] : null,
+      [`Kolonner: ${stats.columns.map(c => ENERGIFLOW_LABELS[c] || c).join(', ')}`, 'var(--muted)'],
+      stats.gapHours ? [`⚠ ${stats.gapHours.toLocaleString('da-DK')} timer uden data i perioden (huller springes over)`, 'var(--accent)'] : null,
+      stats.negatives ? [`⚠ ${stats.negatives} negative værdier ignoreret (tæller-fejl)`, 'var(--accent)'] : null,
+      stats.balancePct != null ? [`Energibalance: ${stats.balancePct.toFixed(1).replace('.', ',')} % af forbruget går ikke op (tab/måleafvigelse)`,
+        stats.balancePct > 10 ? 'var(--accent)' : 'var(--muted)'] : null,
+    ].filter(Boolean);
+    statusEl.textContent = '';
+    for (const [text, color] of lines) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      if (color) div.style.color = color;
+      statusEl.appendChild(div);
+    }
+    checkReady();
+  };
+  reader.readAsText(file, 'utf-8');
+}
+
+// Liste over eksportører (data/energiflow-kilder.json) — samme mønster som produktionsaftagere
+(async function initInverterSources() {
+  const ul = document.getElementById('inverterSourceList');
+  if (!ul) return;
+  try {
+    const resp = await fetch('data/energiflow-kilder.json', { cache: 'no-cache' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    ul.textContent = '';
+    for (const k of data.kilder || []) {
+      const li = document.createElement('li');
+      const ready = k.status === 'klar' && k.url;
+      if (!ready) li.className = 'src-planned';
+      const name = document.createElement(ready ? 'a' : 'strong');
+      name.textContent = k.navn;
+      if (ready) { name.href = k.url; name.target = '_blank'; name.rel = 'noopener'; name.style.color = 'var(--accent)'; name.style.fontWeight = '600'; }
+      else name.style.color = 'var(--text)';
+      li.appendChild(name);
+      if (!ready) {
+        const tag = document.createElement('span');
+        tag.className = 'src-tag';
+        tag.textContent = 'planlagt';
+        li.appendChild(tag);
+      }
+      const desc = document.createElement('div');
+      desc.textContent = [k.daekker, k.note].filter(Boolean).join(' — ');
+      desc.style.color = 'var(--muted)';
+      li.appendChild(desc);
+      ul.appendChild(li);
+    }
+  } catch {
+    ul.innerHTML = '<li style="color:var(--muted)">Kunne ikke indlæse listen. Se formatet via linket ovenfor.</li>';
+  }
+})();
 
 function checkReady() {
-  const ready = state.exportRows && state.exportRows.length > 0;
+  const ready = (state.exportRows && state.exportRows.length > 0) || (state.inverter?.rows?.length > 0);
   document.getElementById('btnAnalyze').disabled = !ready;
   if (ready) updateStepIndicator(2);
 }
@@ -3098,20 +3875,29 @@ document.getElementById('btnAnalyze').addEventListener('click', async () => {
   statusBar.classList.remove('error');
 
   try {
-    const rows = state.exportRows;
+    const inv = state.inverter?.rows || null;
+    let rows = state.exportRows || [];
+    let forbrugRows = state.forbrugRows || [];
     const priceArea = document.getElementById('priceArea').value;
 
-    // Fetch range covers both export and forbrug (if loaded) to avoid missing hours
-    let fetchStart = rows[0].hourKey.slice(0, 10);
-    let fetchEnd   = rows[rows.length - 1].hourKey.slice(0, 10);
-    if (state.forbrugRows?.length) {
-      const fs = state.forbrugRows[0].hourKey.slice(0, 10);
-      const fe = state.forbrugRows[state.forbrugRows.length - 1].hourKey.slice(0, 10);
-      if (fs < fetchStart) fetchStart = fs;
-      if (fe > fetchEnd)   fetchEnd   = fe;
+    // Uden eloverblik-data: eksport-/forbrugsfanerne bruger inverterens net-tal
+    if (!rows.length && inv?.length) {
+      const pick = f => inv.filter(r => r[f] != null).map(r => ({ timestamp: r.timestamp, hourKey: r.hourKey, kwh: r[f] }));
+      rows = pick('gridOut');
+      if (!forbrugRows.length) forbrugRows = pick('gridIn');
+      log.info(`Ingen eloverblik-fil — eksport/forbrug-fanerne bruger inverterens net-tal (${rows.length} eksport-, ${forbrugRows.length} importtimer)`);
     }
 
-    log.info(`Analyse startet: ${rows.length} timer, ${fetchStart} → ${fetchEnd}, ${priceArea}`);
+    // Spotpriser skal dække foreningen af alle indlæste dataintervaller
+    let fetchStart = null, fetchEnd = null;
+    for (const arr of [rows, forbrugRows, inv]) {
+      if (!arr?.length) continue;
+      const s = arr[0].hourKey.slice(0, 10), e = arr[arr.length - 1].hourKey.slice(0, 10);
+      if (!fetchStart || s < fetchStart) fetchStart = s;
+      if (!fetchEnd   || e > fetchEnd)   fetchEnd   = e;
+    }
+
+    log.info(`Analyse startet: ${rows.length} eksporttimer${inv ? `, ${inv.length} invertertimer` : ''}, ${fetchStart} → ${fetchEnd}, ${priceArea}`);
     statusText.textContent = `Tjekker cache...`;
 
     const spotPrices = await fetchSpotPrices(fetchStart, fetchEnd, priceArea);
@@ -3121,9 +3907,19 @@ document.getElementById('btnAnalyze').addEventListener('click', async () => {
     const data = analyze(rows, spotPrices, tariffs, state.tariffData);
     state.analysisData = data;
 
-    state.consumptionMonths = state.forbrugRows?.length
-      ? analyzeConsumption(state.forbrugRows, spotPrices, state.tariffData, tariffs)
+    state.consumptionMonths = forbrugRows.length
+      ? analyzeConsumption(forbrugRows, spotPrices, state.tariffData, tariffs)
       : null;
+
+    // Besparelse: elmåleren (eloverblik D07/D06) er autoritativ for net-tal hvor den findes
+    if (inv?.length) {
+      const grid = state.exportRows?.length && state.forbrugRows?.length
+        ? { imp: new Map(state.forbrugRows.map(r => [r.hourKey, r.kwh])), exp: new Map(state.exportRows.map(r => [r.hourKey, r.kwh])) }
+        : null;
+      state.savings = analyzeSavings(inv, spotPrices, state.tariffData, tariffs, grid);
+    } else {
+      state.savings = null;
+    }
 
     statusText.textContent = `Analyse færdig — ${data.length} timer analyseret`;
     renderResults(data, tariffs);

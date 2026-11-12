@@ -17,7 +17,12 @@ Alt processeres lokalt i browseren — ingen data forlader brugerens maskine.
    - Energinets system + transmission + indfødnings + balancetariff
    - Statslig elafgift (varierer per periode)
    - Leverandørs markup (fra Strømligning, dato-aware)
-6. Appen beregner per-time `netto_eksport = spot − fradrag` og viser resultater på **5 faner:** Oversigt (søjlediagram + fordeling + månedstabel), Timer under grænse, Alle eksportimer, Månedsoversigt, Afregnings-validering og Elforbrug-validering
+6. Appen beregner per-time `netto_eksport = spot − fradrag` og viser resultater på fanerne Oversigt (søjlediagram + fordeling + månedstabel), Timer under grænse, Alle eksportimer, Månedsoversigt, Afregnings-validering og Elforbrug-validering
+7. **(Valgfrit) Inverter-data → fanen "Besparelse".** Brugeren uploader en [energiflow-CSV](docs/energiflow-format.md) (PV, forbrug, batteri og net pr. 5 min–1 time). Appen beregner så den reelle besparelse ved solceller + batteri time for time: *uden anlæg* (forbrug × købspris) minus *faktisk* (køb × købspris − salg × salgspris). Besparelsen deles op i direkte selvforbrug, overskud (salgsværdi), batteri (tidsforskydning, fx natlig opladning fra nettet brugt om aftenen) og afvigelse. Fanen har også en døgnprofil pr. måned og en afstemning af inverterens net-tal mod elmåleren. eloverblik er autoritativ for net-tal hvor den findes; uden eloverblik bruger alle faner inverterens net-tal.
+
+### Inverter-data: åbent format + separate eksportører
+
+Appen henter **ikke** selv data fra invertere. Den importerer ét åbent format, [energiflow-CSV v1](docs/energiflow-format.md), og små separate projekter (*eksportører*) henter fra de enkelte systemer: Home Assistant (dækker SolarAssistant, Growatt, FoxESS, Huawei, SolarEdge …), inverter-clouds osv. Kendte eksportører står i `data/energiflow-kilder.json` og vises i upload-boksen. Det holder leverandør-API'er, logins og deres vedligehold ude af denne repo.
 
 ## Arkitektur
 
@@ -71,6 +76,8 @@ Spotpriser og tariff-data fra Energi Data Service (EDS) er **kun** tilgængelige
 │   ├── prices/manifest.json            # liste af tilgængelige måneder
 │   ├── tariffs/{GLN}.json              # netselskabs nettarif (consumption + indfødning)
 │   ├── tariffs/_supplier-map.json      # Strømligning supplier_id → EDS GLN + koder
+│   ├── produktionsaftagere.json        # manuel liste over elhandlere der køber overskudsstrøm
+│   ├── energiflow-kilder.json          # manuel liste over eksportører der skriver energiflow-CSV
 │   └── constants/
 │       ├── energinet.json              # system+transmission+indfødn+balance, historik
 │       └── elafgift.json               # statslig elafgift, historik
@@ -81,7 +88,9 @@ Spotpriser og tariff-data fra Energi Data Service (EDS) er **kun** tilgængelige
 │   └── fetch-energinet.mjs             # Energinet + elafgift (DatahubPricelist)
 │
 ├── test/
-│   └── parse-check.mjs                 # kører den ægte CSV-parser (udtrukket fra index.html) mod test-data/
+│   ├── parse-check.mjs                 # kører den ægte CSV-parser (udtrukket fra index.html) mod test-data/
+│   ├── energiflow-check.mjs            # tester energiflow-parser + pris- og besparelsesmodel (udtrukket fra index.html)
+│   └── fixtures/energiflow-sample.csv  # syntetisk fixture (sommertid, 15-min, tællerfejl, natlig opladning)
 ├── test-data/                          # (git-ignoreret) private eloverblik-CSV'er til lokal test
 ├── package.json                        # kun devDep: papaparse (til parse-check.mjs)
 │
@@ -91,6 +100,7 @@ Spotpriser og tariff-data fra Energi Data Service (EDS) er **kun** tilgængelige
 │
 └── docs/
     ├── HANDOVER.md                     # projekt-state og fortsættelse
+    ├── energiflow-format.md            # åben spec for inverter-import (energiflow-CSV v1)
     └── overdragelse-solcelle-analyse.md # original planlægning
 ```
 
@@ -114,6 +124,14 @@ python3 -m http.server 8080
 npm install            # henter papaparse (eneste devDep)
 npm run test:parse                      # første *.csv i test-data/
 node test/parse-check.mjs sti/til.csv   # specifik fil
+```
+
+### Test af energiflow-import og besparelsesmodel
+
+`test/energiflow-check.mjs` udtrækker blokkene `==INVERTER_PARSE_START/END==` (energiflow-parseren) og `==ANALYSIS_CORE_START/END==` (købs-/salgspris, `analyze`, `analyzeConsumption`, `analyzeSavings`) fra `index.html`. Den kører dem mod det committede, syntetiske fixture `test/fixtures/energiflow-sample.csv` med håndregnede forventede værdier: sommertidsskift, 15-min-aggregering, tællerfejl, at besparelsesposterne summerer eksakt, og at elmålerens tal overstyrer inverterens.
+
+```sh
+npm test               # = npm run test:energiflow
 ```
 
 Den viser måleserier, tidsintervaller, aggregerede timetal og om "Hent spotpriser"-knappen ville aktiveres.
@@ -175,7 +193,7 @@ Spot-datasettene har dansk lokal tid i DK-kolonnerne. `DayAheadPrices` har 15-mi
 ## Privacy
 
 - Ingen brugerdata sendes til nogen server vi kontrollerer
-- CSV processeres i browseren via FileReader
+- CSV processeres i browseren via FileReader (både eloverblik og energiflow/inverter-data)
 - Spotpriser caches i IndexedDB lokalt
 - Strømligning-kald sender kun (koordinater fra DAWA, supplier_id, product_id) — ingen personlige data
 - DAWA-kald sender kun adresse-query — ingen identifikatorer

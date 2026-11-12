@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test:parse": "node test/parse-check.mjs"
+    "test:parse": "node test/parse-check.mjs",
+    "test:energiflow": "node test/energiflow-check.mjs",
+    "test": "node test/energiflow-check.mjs"
   },
   "devDependencies": {
     "papaparse": "5.4.1"

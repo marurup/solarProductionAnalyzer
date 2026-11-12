@@ -1,0 +1,46 @@
+{
+  "_kommentar": "Manuelt vedligeholdt liste over eksportører der skriver energiflow-CSV v1 (docs/energiflow-format.md). Appen henter ikke selv fra invertere — hver eksportør er et separat projekt. status: 'klar' (virker, link vises) eller 'planlagt' (vises nedtonet). 'daekker' = systemer/mærker eksportøren kan hente fra.",
+  "opdateret": "2026-11-12",
+  "kilder": [
+    {
+      "navn": "SolarAssistant",
+      "status": "klar",
+      "daekker": "Invertere der er koblet til SolarAssistant (testet med Growatt)",
+      "note": "Træk SolarAssistants backup-zip (Configuration → System → View detail → Backup) ind på siden. Giver timedata for hele historikken. Alt sker i din browser.",
+      "url": "https://marurup.github.io/solarProductionAnalyzer-exporter-solarAssistant/",
+      "opdateret": "2026-11"
+    },
+    {
+      "navn": "Home Assistant",
+      "status": "planlagt",
+      "daekker": "Alle invertere med en Home Assistant-integration: SolarAssistant (MQTT), Growatt, FoxESS, Huawei, SolarEdge, Fronius, Deye/Sunsynk, AEG m.fl.",
+      "note": "Henter timestatistik fra HA's energitællere direkte i din browser (eller via et lille kommandolinjeværktøj) og skriver energiflow-CSV.",
+      "url": null,
+      "opdateret": "2026-11"
+    },
+    {
+      "navn": "FoxESS Cloud",
+      "status": "planlagt",
+      "daekker": "FoxESS H1/H3/KH m.fl. via den officielle Open API (API-nøgle fra foxesscloud.com)",
+      "note": null,
+      "url": null,
+      "opdateret": "2026-11"
+    },
+    {
+      "navn": "Growatt ShineServer",
+      "status": "planlagt",
+      "daekker": "Growatt MIN/MOD/SPH via server.growatt.com (uofficiel API)",
+      "note": "Uofficielt login, der kan holde op med at virke. Har du SolarAssistant eller Home Assistant, så brug hellere dem.",
+      "url": null,
+      "opdateret": "2026-11"
+    },
+    {
+      "navn": "Skriv din egen",
+      "status": "klar",
+      "daekker": "Alt der kan levere energi pr. 5 min–1 time",
+      "note": "Formatet er en simpel CSV med åben specifikation. Et regneark kan også gemme den.",
+      "url": "https://github.com/marurup/solarProductionAnalyzer/blob/main/docs/energiflow-format.md",
+      "opdateret": "2026-11"
+    }
+  ]
+}

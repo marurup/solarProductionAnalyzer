@@ -1,6 +1,6 @@
 # Handover-dokument — Solcelle Eksport-Analyse
 
-**Sidst opdateret:** 2026-08-07
+**Sidst opdateret:** 2026-11-12
 **Repo:** https://github.com/marurup/solarProductionAnalyzer
 **Live:** https://marurup.github.io/solarProductionAnalyzer/
 
@@ -81,7 +81,12 @@ Dette dokument beskriver hele projektets nuværende tilstand, så arbejdet kan f
   - **Nøglekonklusioner:** tarifferne (EDS) er korrekte; **moms ×1,25 er korrekt** (kun på tarifferne, ikke på salget); **`t4`-default rettet 3,00 → 0**; **Vindstød tager et fast spread på 1,00 øre/kWh** (spot − 1 øre) → modelleres med `t4 = 1,0`. `t4` dækker både gebyr OG spread; default 0 fordi det er handler-specifikt.
 
 ### Næste skridt (planlagt)
-- **Importér energidata fra solcelle-inverteren** (Growatt, Huawei/SolarEdge m.fl., og aggregatorer som [solar-assistant.io](https://solar-assistant.io)). Inverteren har finere/mere komplet data end eloverblik (fx produktion FØR nettomåling, selvforbrug per interval, batteri-flow). Formål: **beregn den reelle besparelse ved at have solceller** — sammenlign inverterens produktions-/selvforbrugstal mod de aktuelle spot+tarif-priser time for time (selvforbrugt kWh × undgået købspris + eksporteret kWh × nettopris). Afklaring: hvilke eksportformater/API'er (Growatt ShinePhone/OSS API, solar-assistant CSV/MQTT-eksport), tidsopløsning, og hvordan de mappes til appens time-model. Kan udvide den eksisterende parser eller blive en ny import-kilde ved siden af eloverblik-CSV.
+- **Første eksportør er lavet: `solarProductionAnalyzer-exporter-solarAssistant`** (separat repo, ligger lokalt som `C:\Projects\solarProductionAnalyzer-exporter-solarAssistant`).
+  - Læser SolarAssistants backup-zip, som er en InfluxDB 1.8 portable backup med TSM-shards. Det sker i browseren uden afhængigheder, og der er også en Node-CLI.
+  - Bruger SA's egne timemålinger (`PV/Load/Battery in/out/Grid in/out power hourly`, gennemsnits-W = Wh) og SOC.
+  - Verificeret mod HA inden for 0,3 % (jun og nov 2026).
+  - Posten i `data/energiflow-kilder.json` er sat til `klar` med GitHub Pages-URL. Push begge repos samtidig og slå Pages til på det nye.
+- **Næste eksportør: Home Assistant** (separat repo, navn ikke endeligt). Statisk side, der via HA-websocket (`recorder/statistics_during_period`, period `hour`) med URL + long-lived token henter energitællerne og skriver energiflow-CSV. Entiteter foreslås ud fra `device_class: energy` og mappes af brugeren. Dertil en Node-CLI med samme kode til HA på lokal http (https-sider må ikke åbne `ws://`). Dækker alt med en HA-integration, også SolarAssistant via MQTT. Ret posten i `data/energiflow-kilder.json` til `status: "klar"` + `url`, når den er ude. Senere: FoxESS Open API og Growatt (uofficiel) som egne eksportører.
 - **Verificér elforbrug-regninger** på samme grundige måde som produktionsafregningerne blev (2026-07-07). Sammenlign "Elforbrug-validering"-fanens beregnede månedsregning mod brugerens faktiske el-regninger (fx PDF-udtræk med `pdftotext -layout`). Tjek særligt: forbrugstariffer per time-på-døgnet (distribution), Energinet system+transmission, elafgift, leverandørtillæg (markup fra Strømligning), moms, og faste abonnementer (netselskab + elselskab, kr/md). Bekræft at kWh og totaler matcher regningerne.
 ### Data-fuldstændighed
 - **Videbæk Elnet** kunne ikke auto-matches til EDS (kun 34 af 38 Strømligning suppliers er backfillet). Skal undersøges hvor de findes i EDS.
@@ -89,6 +94,13 @@ Dette dokument beskriver hele projektets nuværende tilstand, så arbejdet kan f
 - **Energinet 2019 og tidligere** mangler i `data/constants/energinet.json`. EDS har historik længere tilbage — udvid `fetch-energinet.mjs` til at hente mere.
 
 ### Nye features (implementeret)
+- ✅ **Inverter-import + fanen "Besparelse" (2026-11-12).** Ny valgfri drop-zone i trin 1 for **energiflow-CSV v1** (`docs/energiflow-format.md`): PV, forbrug, batteri ind/ud, net ind/ud pr. 5 min–1 time, ISO-tid med offset. Appen henter **ikke** selv fra invertere. Separate eksportører skriver formatet og listes fra `data/energiflow-kilder.json` (samme mønster som produktionsaftagere).
+  - **Parser** (`==INVERTER_PARSE_START/END==`): aggregerer til danske timenøgler via `Intl` (Europe/Copenhagen). Sommertidstimen i oktober lægges sammen, ligesom spotpriser/eloverblik. Tomme celler bliver null (ukendt), negative værdier (tællerfejl) ignoreres, og huller samt energibalance rapporteres.
+  - **Pris pr. time udtrukket** til `buyPriceOere()`/`sellPriceOere()`, som `analyze`, `analyzeConsumption` og `analyzeSavings` alle bruger. Refaktoreringen er bevist neutral på de rigtige data (2021–2026, 417 tal, maks. afvigelse 6·10⁻¹⁴).
+  - **`analyzeSavings()`** fordeler hver time: PV→hus, PV→batteri, PV→net, net→batteri, batteri→hus, batteri→net. Besparelse = forbrug × købspris − (køb × købspris − salg × salgspris), opdelt i *direkte selvforbrug*, *overskud (salgsværdi)*, *batteri (tidsforskydning)* og *afvigelse*. Posterne summerer eksakt. Net-tal tages fra eloverblik, hvor **både** D06 og D07 dækker timen, ellers fra inverteren.
+  - **UI:** KPI'er, månedligt stablet søjlediagram (divergerende), døgnprofil pr. måned (forbrug dækket af sol/batteri/net over aksen, batteriopladning under) med købspris-kurve på samme timeakse, og månedstabel med afstemning inverter mod elmåler. Uden eloverblik-fil bruger eksport- og forbrugsfanerne inverterens net-tal.
+  - **Verificeret på brugerens data** (Growatt via SolarAssistant → HA): nov 1.–11. 2026 viser net→batteri kl. 02–05 (~2,33 kr/kWh) og batteri→hus kl. 16–20 (3,80–4,66 kr/kWh). Batteri +177 kr, besparelse 538 kr. Jun 2026 mod eloverblik: inverterens eksport −0,9 %, import −13 % (små tal, 36 mod 41,5 kWh). Afvigelse 34 kr af 1866 kr.
+  - **Test:** `npm test` (`test/energiflow-check.mjs`, 53 assertions mod syntetisk fixture).
 - ✅ **Produktionsaftager-dropdown** — i Salg-panelet en `<select id="aftagerSelect">` over kendte elhandlere der køber overskudsstrøm; valg udfylder `t4` og viser note med abonnement, kilde, link og tjek-dato. "— Indtast selv —" lader brugeren skrive selv.
   - **Listen er en separat datafil: `data/produktionsaftagere.json`** (hentes med `fetch(..., {cache:'no-cache'})`). Felter pr. post: `navn`, `kategori` (`"alene"` = tegnes uanset elselskab, `"elkunde"` = kræver kundeforhold), `spread` (øre/kWh = t4; `null` = ukendt), `abonnement` (kr/md; 0 = gratis), `note`, `kilde`, `url`, `opdateret`.
   - **Dropdown opdelt i to `<optgroup>`:** "Produktionsaftale alene" og "Kræver/forudsætter elkunde hos selskabet".
@@ -234,6 +246,9 @@ npm install      # kun papaparse (devDep), til test/parse-check.mjs
 - **Spot fra EDS, ikke fra Strømligning** — vi vil ikke blande spot fra flere kilder; én autoritativ kilde (Nord Pool via EDS)
 - **Ingen elafgift hardcoded** — EDS er autoritativ (vi fandt fejl i vores oprindelige hardcoded historik for 2022/2023)
 - **Selvforbrugsværdi og "tabt fortjeneste" fjernet (2026-08)** — eloverblik viser kun netto-import (D07) og netto-eksport (D06), ikke hvad der faktisk blev forbrugt bag måleren. En bruger med batteri + elbil har allerede optimeret selvforbrug; det eksporterede er ægte overskud. "Tabt fortjeneste" (= hvad man kunne have tjent ved selvforbrug) var et skyggetal baseret på en forkert antagelse og er fjernet helt. Actionabelt fokus: *negativ pris* (man betaler for at eksportere) er det eneste reelt handlebare.
+- **Selvforbrugsværdi genindført, nu på målte data (2026-11)**: punktet ovenfor fjernede den, fordi den byggede på en antagelse om hvad der skete bag måleren. Med inverter-data *måles* flows bag måleren, så besparelsen (inkl. batteri) beregnes nu på reelle tal. Uden inverter-data vises den stadig ikke.
+- **Inverter-import = åbent format + separate eksportører (2026-11)**: appen importerer kun energiflow-CSV. Hentning fra Growatt/FoxESS/HA/SolarAssistant m.fl. ligger i separate projekter (linkes fra `data/energiflow-kilder.json`). Det holder leverandør-API'er, logins og CORS-problemer ude af appen og bevarer "alt lokalt i browseren". Home Assistant er valgt som første eksportør, fordi den dækker næsten alle mærker.
+- **eloverblik er autoritativ for net-tal (2026-11)**: besparelsen bruger elmålerens import/eksport (det der afregnes) og inverteren til PV/forbrug/batteri. Forskellen vises som "afvigelse" og i afstemningskolonnen.
 - **Positiv-framing af analyse (2026-08)** — bruger lander nu på "Oversigt"-fanen med søjlediagram og fordeling af alle eksportimer. "Problematiske timer" omdøbt til "Timer under grænse". 4 kategorier (god/lav/dårlig/negativ) i stedet for binær god/dårlig.
 
 ## 7. Kontakt-info
