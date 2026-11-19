@@ -123,6 +123,12 @@ Dette dokument beskriver hele projektets nuværende tilstand, så arbejdet kan f
     - Fra 19. dec til 5. jan, altså før firmwaren, var der 37 timer med tomt batteri og ingen sol uden dvale. Efter 10. jan er der 268 sådanne timer uden dvale, og inverteren ser 99 % af elmålerens køb.
     - Sandsynlig årsag: indstillingerne for natteopladning (AC-opladning/tidsplan) holder inverteren aktiv. SolarAssistants hul 6.–9. jan 2026 (77 t) er selve firmwareopdateringen.
     - Effekt i alt: 1.363 kWh lagt til forbruget. Afvigelsen gik fra −2.085 kr til +535 kr, og nov/dec 2025 gik fra negativ til positiv besparelse.
+- ✅ **Afstemning mod regning og salg i Besparelse-fanen (2026-11-19)** (`renderReconciliation`). Pr. måned, kvartal eller år vises kæden *køb − salg = faktisk*, *− uden for besparelsen*, *+ besparelse = uden anlæg* og forbruget i kWh.
+  - Køb og salg regnes over hele måneder fra elmåler-data, som i Elforbrug- og Afregnings-validering, men uden abonnementer.
+  - "Uden for besparelsen" er timer med elmåler-data, men uden inverter-data (minus), eller omvendt (plus).
+  - Brugeren kan taste regningens variable del ekskl. moms og udbetalingen pr. periode. De gemmes i `solar-reconcile-v1`, og forskellen vises med ✓.
+  - Er alle måneder i perioden udfyldt i valideringsfanerne, bruges summen derfra (regning − abonnement, udbetaling + abonnement).
+  - På brugerens data passer 4 kvartaler inden for 3 øre for både køb og salg. Kun "uden anlæg", altså forbruget i kWh fra inverteren, kan ikke afstemmes mod et dokument.
 - ✅ **Verifikation af besparelsestallene (2026-11-19)** på brugerens data, feb 2025–nov 2026.
   - **Koden:** et uafhængigt script med egen parsing af SA-CSV, eloverblik, spot og tariffer gav samme resultat som `analyzeSavings` i alle 22 måneder (maks. 5·10⁻¹³ kr, total 29.112,24 kr).
   - **Salg end-to-end:** elmålerens D06 × salgspris mod Vindstøds afregninger for 24 måneder (okt 2024–sep 2026) gav 5.980,42 mod 5.980,38 kr (±0,02 kr/md). Det verificerer spotpriser (også timesnit af 15-min-priser fra okt 2025), Energinet og N1-indfødning, moms og t4.

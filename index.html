@@ -902,6 +902,46 @@
           <tbody id="savingsBody"></tbody>
         </table>
       </div>
+
+      <div id="reconSection" style="margin-top:28px">
+        <div class="row" style="margin-bottom:4px">
+          <h3 style="margin:0">Afstemning mod regning og salg</h3>
+          <div class="spacer"></div>
+          <label for="reconGroup" style="font-size:0.8rem; color:var(--muted)">Periode</label>
+          <select id="reconGroup">
+            <option value="month">Måned</option>
+            <option value="quarter" selected>Kvartal</option>
+            <option value="year">År</option>
+          </select>
+        </div>
+        <p style="font-size:0.8rem; margin-bottom:10px; line-height:1.6">
+          Sådan hænger tallene sammen: <strong style="color:var(--text)">køb − salg = faktisk</strong>, og <strong style="color:var(--text)">faktisk + besparelse = uden anlæg</strong>.
+          Køb og salg kan du tjekke mod dine papirer — tast beløbene ind, så vises forskellen. Uden anlæg kan ikke tjekkes mod et dokument: det er husets forbrug ifølge inverteren (kWh) × de samme købspriser, som regningen bruger.
+        </p>
+        <div class="table-wrap">
+          <table id="reconTable">
+            <thead>
+              <tr>
+                <th class="th-static">Periode</th>
+                <th class="th-static" title="Elmålerens køb × købspris (spot + tariffer + afgift + tillæg, inkl. moms)">Køb</th>
+                <th class="th-static">Din regning<span class="help-icon" tabindex="0" role="img" aria-label="Hjælp" data-tip="Den variable del af elregningen ekskl. moms og uden abonnementer — på Vindstøds regning: 'I alt aflæsning ekskl. moms'. Appen lægger moms på og sammenligner med Køb. Står tallene i Elforbrug-validering for alle måneder i perioden, bruges de automatisk.">?</span></th>
+                <th class="th-static" title="Elmålerens salg × salgspris">Salg</th>
+                <th class="th-static">Dit salg<span class="help-icon" tabindex="0" role="img" aria-label="Hjælp" data-tip="Udbetalt for salg af strøm i perioden (fx 'Total' på Vindstøds afregning). Står tallene i Afregnings-validering for alle måneder i perioden, bruges de automatisk.">?</span></th>
+                <th class="th-static">= Faktisk</th>
+                <th class="th-static" title="Timer hvor inverteren mangler data: med i regningen, ikke i besparelsen">Uden for besparelsen</th>
+                <th class="th-static">+ Besparelse</th>
+                <th class="th-static">= Uden anlæg</th>
+                <th class="th-static" title="Husets forbrug ifølge inverteren (inkl. køb kun elmåleren så)">Forbrug</th>
+              </tr>
+            </thead>
+            <tbody id="reconBody"></tbody>
+          </table>
+        </div>
+        <p style="font-size:0.78rem; margin-top:8px; color:var(--muted)">
+          <em>Uden for besparelsen</em>: minus = timer i regningen, hvor inverteren mangler data (de er ikke med i besparelsen); plus = timer i besparelsen, hvor elmåler-data mangler (fx de seneste dage). Grøn ✓ = dit beløb passer med det beregnede. Abonnementer er ikke med nogen steder, fordi de betales under alle omstændigheder.
+        </p>
+      </div>
+
       <details class="col-help" style="margin-top:14px; background:var(--bg); border:1px solid var(--border); border-radius:8px; overflow:hidden;">
         <summary style="cursor:pointer; padding:10px 14px; font-size:0.85rem; color:var(--accent); font-weight:500; user-select:none;">Sådan regnes besparelsen</summary>
         <div style="padding:4px 14px 12px; font-size:0.85rem; color:var(--muted); line-height:1.6;">
@@ -2709,6 +2749,8 @@ function renderSavings() {
   const fullDays = dayKeys.filter(d => s.days.get(d).reduce((n, b) => n + b.hours, 0) >= 23);
   renderSavingsDay(s.days.has(pick.value) ? pick.value : (fullDays[fullDays.length - 1] || dayKeys[dayKeys.length - 1]));
 
+  renderReconciliation();
+
   // Månedstabel
   const pct = (a, b) => b > 0 ? ((a / b - 1) * 100) : null;
   const fmtPct = v => v == null ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(1).replace('.', ',') + ' %';
@@ -2945,6 +2987,120 @@ function renderSavingsDay(dayKey) {
       (hasBattery ? `<td>${n2(b.battery)}</td>` : '') + `<td style="color:var(--muted)">${n2(b.residual)}</td></tr>`;
   };
   tbl.tBodies[0].innerHTML = buckets.map((b, h) => line(String(h).padStart(2, '0'), b)).join('') + line('Døgn', t, true);
+}
+
+// ─── Afstemning: regning − salg = faktisk; faktisk + besparelse = uden anlæg ──
+// Køb/salg regnes over HELE måneder fra elmåler-data (samme tal som Elforbrug- og
+// Afregnings-validering, uden abonnementer). Besparelsens "faktisk" dækker kun timer
+// med inverter-data — forskellen vises som "uden for besparelsen".
+const RECON_KEY = 'solar-reconcile-v1';
+function loadRecon() { try { return JSON.parse(localStorage.getItem(RECON_KEY) || '{}'); } catch { return {}; } }
+function saveRecon(key, field, value) {
+  try {
+    const all = loadRecon();
+    const e = all[key] || {};
+    if (value === '' || isNaN(value)) delete e[field]; else e[field] = value;
+    if (Object.keys(e).length) all[key] = e; else delete all[key];
+    localStorage.setItem(RECON_KEY, JSON.stringify(all));
+  } catch { /* privat vindue o.l. — afstemningen virker stadig, gemmes bare ikke */ }
+}
+
+function reconGroupKey(monthKey, mode) {
+  const [y, m] = monthKey.split('-');
+  return mode === 'month' ? monthKey : mode === 'year' ? y : `${y}-K${Math.ceil(+m / 3)}`;
+}
+function reconGroupLabel(key, mode) {
+  if (mode === 'month') return fmtMonth(key);
+  if (mode === 'year') return key;
+  const [y, q] = key.split('-K');
+  return `${q}. kvt. ${y}`;
+}
+
+function renderReconciliation() {
+  const s = state.savings, section = document.getElementById('reconSection');
+  const buyMonths = state.consumptionMonths;
+  if (!s || !buyMonths?.size || !state.analysisData) { section.style.display = 'none'; return; }
+  section.style.display = '';
+  const sel = document.getElementById('reconGroup');
+  sel.onchange = renderReconciliation;
+  const mode = sel.value;
+
+  const saleMonths = buildRevenueMonths(state.analysisData);   // uden abonnement
+  const billActuals = loadBillActuals(), revActuals = loadRevenueActuals();
+  const cfg = loadBillConfig();
+  const billSub = (parseFloat(cfg.netSubscription) || 0) + (parseFloat(cfg.supplierSubscription) || 0);
+  const revAbon = loadRevenueAbon();
+
+  // Grupper månederne med inverter-data
+  const groups = new Map();
+  for (const [mk, m] of [...s.months.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    const gk = reconGroupKey(mk, mode);
+    if (!groups.has(gk)) groups.set(gk, { months: [], buy: 0, sale: 0, actual: 0, savings: 0, baseline: 0, kwh: 0 });
+    const g = groups.get(gk);
+    g.months.push(mk);
+    g.buy += buyMonths.get(mk)?.totalVariable || 0;
+    g.sale += saleMonths.get(mk)?.nettoRevenue || 0;
+    g.actual += m.actual; g.savings += m.savings; g.baseline += m.baseline; g.kwh += m.load + m.unseenLoad;
+  }
+
+  // Faktiske beløb: tastet her (pr. periode) eller summen fra valideringsfanerne, hvis alle måneder er udfyldt
+  const fromTabs = (g, actuals, adjust) => {
+    if (!g.months.every(mk => actuals[mk] !== undefined && actuals[mk] !== '' && !isNaN(parseFloat(actuals[mk])))) return null;
+    return g.months.reduce((sum, mk) => sum + parseFloat(actuals[mk]) + adjust, 0);
+  };
+  const actualFor = (gk, g) => {
+    const r = loadRecon()[gk] || {};   // læses friskt, så nye indtastninger tæller med
+    return {
+      bill: r.bill != null ? { v: r.bill * 1.25, src: 'input', raw: r.bill } : (v => v == null ? null : { v, src: 'tab' })(fromTabs(g, billActuals, -billSub)),
+      sale: r.sale != null ? { v: r.sale, src: 'input', raw: r.sale } : (v => v == null ? null : { v, src: 'tab' })(fromTabs(g, revActuals, revAbon)),
+    };
+  };
+  const diffHtml = (calc, act) => {
+    if (!act) return '';
+    const d = calc - act.v;
+    const ok = Math.abs(d) <= Math.max(2, Math.abs(act.v) * 0.002);
+    return `<div style="font-size:0.72rem;color:${ok ? 'var(--green)' : 'var(--accent)'}">${ok ? '✓ ' : ''}${Math.abs(d) < 0.005 ? '±' : d > 0 ? '+' : '−'}${fmtDKK(Math.abs(d))}${act.src === 'tab' ? ' <span style="color:var(--muted)">(fra fane)</span>' : ''}</div>`;
+  };
+  const inputCell = (gk, field, act, calc, title) =>
+    `<td><input type="number" step="0.01" class="recon-input" data-key="${gk}" data-field="${field}" title="${title}"
+      value="${act?.src === 'input' ? act.raw : ''}" placeholder="${act?.src === 'tab' ? fmtDKK(act.v).replace(' kr', '') : '—'}"
+      style="width:92px; padding:3px 7px; font-size:0.85rem; background:var(--bg); border:1px solid var(--border); border-radius:4px; color:var(--text);">
+      <div id="recon-${field}-${gk}">${diffHtml(calc, act)}</div></td>`;
+
+  const tot = { buy: 0, sale: 0, actual: 0, savings: 0, baseline: 0, kwh: 0 };
+  const rows = [...groups.entries()].map(([gk, g]) => {
+    for (const k of Object.keys(tot)) tot[k] += g[k];
+    const act = actualFor(gk, g);
+    const outside = g.buy - g.sale - g.actual;
+    return `<tr>
+      <td>${reconGroupLabel(gk, mode)}</td>
+      <td>${fmtDKK(g.buy)}</td>${inputCell(gk, 'bill', act.bill, g.buy, 'Variabel del ekskl. moms (fx I alt aflæsning ekskl. moms)')}
+      <td>${fmtDKK(g.sale)}</td>${inputCell(gk, 'sale', act.sale, g.sale, 'Udbetalt for salg (fx Total på afregningen)')}
+      <td style="font-weight:600">${fmtDKK(g.buy - g.sale)}</td>
+      <td style="color:${Math.abs(outside) >= 0.5 ? 'var(--accent)' : 'var(--muted)'}">${Math.abs(outside) < 0.005 ? '0,00 kr' : (outside > 0 ? '−' : '+') + fmtDKK(Math.abs(outside))}</td>
+      <td style="color:${g.savings >= 0 ? 'var(--green)' : 'var(--red)'}">${fmtDKK(g.savings)}</td>
+      <td style="font-weight:600">${fmtDKK(g.baseline)}</td>
+      <td title="gns. ${krPerKwh(g.baseline, g.kwh)} kr/kWh">${fmtKwh(g.kwh)}</td>
+    </tr>`;
+  });
+  const outsideTot = tot.buy - tot.sale - tot.actual;
+  rows.push(`<tr style="font-weight:600;border-top:2px solid var(--border)">
+    <td>I alt</td><td>${fmtDKK(tot.buy)}</td><td></td><td>${fmtDKK(tot.sale)}</td><td></td>
+    <td>${fmtDKK(tot.buy - tot.sale)}</td><td>${(outsideTot > 0 ? '−' : '+') + fmtDKK(Math.abs(outsideTot))}</td>
+    <td style="color:${tot.savings >= 0 ? 'var(--green)' : 'var(--red)'}">${fmtDKK(tot.savings)}</td><td>${fmtDKK(tot.baseline)}</td><td>${fmtKwh(tot.kwh)}</td></tr>`);
+  document.getElementById('reconBody').innerHTML = rows.join('');
+
+  // Indtastning: gem + opdatér kun forskellen (bevar fokus)
+  document.querySelectorAll('#reconBody .recon-input').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const { key, field } = inp.dataset;
+      const val = inp.value === '' ? '' : parseFloat(inp.value);
+      saveRecon(key, field, val);
+      const g = groups.get(key);
+      const act = actualFor(key, g)[field];
+      document.getElementById(`recon-${field}-${key}`).innerHTML = diffHtml(field === 'bill' ? g.buy : g.sale, act);
+    });
+  });
 }
 
 function fmtDKK(v) { return v.toFixed(2).replace('.', ',') + ' kr'; }
@@ -4351,6 +4507,8 @@ document.querySelectorAll('.tab').forEach(tab => {
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
     document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+    // Afstemningen bruger beløb tastet i valideringsfanerne — genberegn når fanen åbnes
+    if (tab.dataset.tab === 'savings' && state.savings) renderReconciliation();
   });
 });
 </script>
