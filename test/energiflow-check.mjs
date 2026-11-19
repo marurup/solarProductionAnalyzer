@@ -137,11 +137,21 @@ eq('afvigelse 0 når inverterens net-tal stemmer', s.total.residual, 0, 1e-9);
 eq('døgnprofil: kl. 02 net→batteri', s.profiles.get('2025-11')[2].gridToBat, 2.0);
 eq('døgnprofil: kl. 17 batteri→hus', s.profiles.get('2025-11')[17].batToLoad, 1.8);
 
-// Elmåleren er autoritativ: eloverblik siger 2,5 kWh import kl. 02 (inverter: 2,4)
+// Elmåleren er autoritativ: eloverblik siger 2,5 kWh import kl. 02 (inverter: 2,4).
+// Den ekstra 0,1 kWh har inverteren ikke set → lægges til forbruget i begge regninger:
+// besparelsen er uændret, og intet havner i "afvigelse".
 const grid = { imp: new Map([['2025-11-03T02', 2.5]]), exp: new Map([['2025-11-03T02', 0]]) };
 const sm = lib.analyzeSavings(parsed.rows, spot, null, manual, grid);
-eq('måler-afvigelse havner i "afvigelse"', sm.total.residual, -0.1 * 1.5);
+eq('usete køb → forbrug', sm.total.unseenLoad, 0.1);
+eq('usete køb → ikke i "afvigelse"', sm.total.residual, 0, 1e-12);
+eq('usete køb → besparelse uændret', sm.total.savings, s.total.savings);
+eq('usete køb → uden anlæg + 0,1 kWh × købspris', sm.total.baseline - s.total.baseline, 0.1 * 1.5);
 eq('poster summerer stadig med elmåler-tal', sm.total.direct + sm.total.surplus + sm.total.battery + sm.total.residual, sm.total.savings);
+// Omvendt: måleren så MINDRE end inverteren (2,3) → ingen usete køb, forskellen er afvigelse
+const smLow = lib.analyzeSavings(parsed.rows, spot, null, manual,
+  { imp: new Map([['2025-11-03T02', 2.3]]), exp: new Map([['2025-11-03T02', 0]]) });
+eq('måler under inverter → ingen usete køb', smLow.total.unseenLoad, 0);
+eq('måler under inverter → afvigelse', smLow.total.residual, 0.1 * 1.5);
 eq('timer med elmåler-tal', sm.total.meterHours, 1);
 eq('afstemning: inverter-import i målertimer', sm.total.meterInvGridIn, 2.4);
 eq('afstemning: måler-import', sm.total.meterGridIn, 2.5);

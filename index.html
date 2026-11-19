@@ -252,6 +252,39 @@
     .viz-tip .tip-row { display: flex; justify-content: space-between; gap: 14px; }
     .viz-tip .tip-row span:first-child { color: var(--muted); }
     .viz-tip .tip-title { font-weight: 600; margin-bottom: 4px; }
+    .viz-wrap .hit.click { cursor: pointer; }
+
+    /* Besparelse: læsevejledning + dagsgennemgang */
+    .savings-guide { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px 16px; margin-bottom: 20px; font-size: 0.8rem; }
+    .savings-guide > div { display: grid; grid-template-columns: 14px 1fr; column-gap: 6px; }
+    .savings-guide .sw { width: 10px; height: 10px; border-radius: 2px; margin-top: 5px; display: inline-block; }
+    .savings-guide strong { color: var(--text); font-weight: 600; }
+    .savings-guide span { grid-column: 2; color: var(--muted); line-height: 1.45; }
+    .btn-small { background: var(--border); color: var(--text); border: 0; border-radius: 6px; width: 32px; height: 32px; font-size: 1.1rem; cursor: pointer; }
+    .btn-small:disabled { opacity: .35; cursor: default; }
+    .btn-small:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    #dayPick { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; color: var(--text); font-size: 0.85rem; color-scheme: dark; }
+    .day-steps { display: grid; gap: 10px; }
+    .day-step { border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+    .day-step h4 { font-size: 0.82rem; color: var(--accent); font-weight: 600; margin-bottom: 6px; }
+    .day-step p { font-size: 0.82rem; margin: 4px 0; }
+    .day-eq { display: grid; grid-template-columns: auto 1fr auto; gap: 3px 12px; font-size: 0.84rem; font-variant-numeric: tabular-nums; align-items: baseline; }
+    .day-eq .lbl { color: var(--text); white-space: nowrap; }
+    .day-eq .lbl .sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; }
+    .day-eq .calc { color: var(--muted); }
+    .day-eq .val { text-align: right; color: var(--text); white-space: nowrap; }
+    .day-eq .eq-row { display: contents; }
+    .day-eq .sum > * { border-top: 1px solid var(--border); padding-top: 4px; font-weight: 600; }
+    .day-eq .sub .lbl { padding-left: 16px; color: var(--muted); }
+    @media (max-width: 600px) {
+      .day-eq { grid-template-columns: 1fr; }
+      .day-eq .eq-row { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; }
+      .day-eq .calc { grid-column: 1 / -1; order: 3; font-size: 0.78rem; }
+    }
+    .day-notes { margin: 6px 0 0 18px; font-size: 0.8rem; color: var(--muted); }
+    .day-notes li { margin: 2px 0; }
+    #dayTable td, #dayTable th { font-size: 0.78rem; padding: 4px 8px; white-space: nowrap; text-align: right; }
+    #dayTable td:first-child, #dayTable th:first-child { text-align: left; }
     :root {
       --s-sol: #c98500;       /* sol / direkte selvforbrug */
       --s-surplus: #199e70;   /* overskud (salgsværdi) */
@@ -788,15 +821,23 @@
     </div>
 
     <div class="tab-content" id="tab-savings">
-      <p style="margin-bottom:16px; font-size:0.85rem; line-height:1.6">
-        Hvad har solceller og batteri sparet? Time for time sammenlignes hvad husets forbrug <em>ville</em> have kostet uden anlæg (forbrug × købspris) med hvad det <em>faktisk</em> kostede (køb − salg), med samme købs- og salgspriser som de øvrige faner.
-        Net-tallene kommer fra elmåleren (eloverblik), hvor de findes, ellers fra inverteren. Faste abonnementer er ikke med, fordi de betales under alle omstændigheder.
+      <p style="margin-bottom:10px; font-size:0.85rem; line-height:1.6">
+        Hvad har solceller og batteri sparet? Hver time sammenlignes to regninger:
+        <strong style="color:var(--text)">uden anlæg</strong> (hele husets forbrug købt til købsprisen) og
+        <strong style="color:var(--text)">faktisk</strong> (det du købte fra nettet minus det du solgte). Forskellen er besparelsen.
+        Købs- og salgspriserne er de samme som i de øvrige faner. Net-tallene kommer fra elmåleren (eloverblik), hvor de findes, ellers fra inverteren. Faste abonnementer er ikke med, fordi de betales under alle omstændigheder.
       </p>
+      <div class="savings-guide">
+        <div><i class="sw" style="background:var(--s-sol)"></i><strong>Solstrøm brugt direkte</strong><span>Sol der gik direkte til huset, værdisat til den købspris du undgik.</span></div>
+        <div><i class="sw" style="background:var(--s-surplus)"></i><strong>Solstrømmens salgsværdi</strong><span>Sol huset ikke brugte med det samme — solgt eller lagt på batteriet — værdisat til salgsprisen.</span></div>
+        <div><i class="sw" style="background:var(--s-battery)"></i><strong>Batteriets merværdi</strong><span>Hvad batteristrømmen var værd, da den blev brugt, minus hvad den kostede at lade.</span></div>
+        <div><i class="sw" style="background:var(--s-residual)"></i><strong>Måleafvigelse og tab</strong><span>Resten: elmåler og inverter er ikke helt enige, og der er tab i inverteren.</span></div>
+      </div>
       <div class="kpi-grid" id="savingsKpis"></div>
 
       <div style="margin-bottom:28px">
         <h3 style="margin-bottom:4px">Besparelse pr. måned</h3>
-        <p style="font-size:0.8rem; margin-bottom:10px">Posterne summerer til besparelsen. Batteriet kan være negativt i en måned, hvis det har kostet mere at lade end strømmen var værd, da den blev brugt.</p>
+        <p style="font-size:0.8rem; margin-bottom:10px">De fire poster summerer til besparelsen. Batteriets merværdi kan være negativ i en måned, hvis det har kostet mere at lade end strømmen var værd, da den blev brugt.</p>
         <div class="viz-legend" id="savingsLegend"></div>
         <div id="savingsChart" class="viz-wrap"></div>
       </div>
@@ -814,6 +855,31 @@
         <div id="profilePriceChart" class="viz-wrap" style="margin-top:6px"></div>
       </div>
 
+      <div style="margin-bottom:28px" id="daySection">
+        <div class="row" style="margin-bottom:4px; flex-wrap:wrap; gap:8px">
+          <h3 style="margin:0">Gennemgang af et døgn</h3>
+          <div class="spacer"></div>
+          <button class="btn-small" id="dayPrev" aria-label="Forrige døgn">‹</button>
+          <input type="date" id="dayPick" aria-label="Vælg dato">
+          <button class="btn-small" id="dayNext" aria-label="Næste døgn">›</button>
+        </div>
+        <p style="font-size:0.8rem; margin-bottom:12px">Hele regnestykket for ét døgn, trin for trin. Vælg en dag — eller klik på en søjle i månedsgrafen for at hoppe til måneden.</p>
+        <div id="dayExplain"></div>
+        <h3 style="margin:18px 0 4px; font-size:0.8rem">Besparelse time for time</h3>
+        <div class="viz-legend" id="dayLegend"></div>
+        <div id="dayChart" class="viz-wrap"></div>
+        <h3 style="margin:18px 0 4px; font-size:0.8rem">Hvor strømmen kom fra og gik hen</h3>
+        <div class="viz-legend" id="dayFlowLegend"></div>
+        <div id="dayFlowChart" class="viz-wrap"></div>
+        <div id="dayPriceChart" class="viz-wrap" style="margin-top:6px"></div>
+        <details class="col-help" style="margin-top:10px; background:var(--bg); border:1px solid var(--border); border-radius:8px; overflow:hidden;">
+          <summary style="cursor:pointer; padding:10px 14px; font-size:0.85rem; color:var(--accent); font-weight:500; user-select:none;">Vis timetabel</summary>
+          <div class="table-wrap" style="margin:0">
+            <table id="dayTable"><thead></thead><tbody></tbody></table>
+          </div>
+        </details>
+      </div>
+
       <h3 style="margin-bottom:10px">Månedstabel</h3>
       <div class="table-wrap">
         <table id="savingsTable">
@@ -825,10 +891,10 @@
               <th class="th-static">Uden anlæg</th>
               <th class="th-static">Faktisk</th>
               <th class="th-static">Besparelse</th>
-              <th class="th-static">Direkte</th>
-              <th class="th-static">Overskud</th>
-              <th class="th-static">Batteri</th>
-              <th class="th-static">Afvigelse</th>
+              <th class="th-static" title="Solstrøm brugt direkte">Sol direkte</th>
+              <th class="th-static" title="Solstrømmens salgsværdi (solgt eller lagt på batteriet)">Sol salgsværdi</th>
+              <th class="th-static" title="Batteriets merværdi">Batteri</th>
+              <th class="th-static" title="Måleafvigelse og tab">Afvigelse</th>
               <th class="th-static">Net→batteri</th>
               <th class="th-static" title="Inverterens net-tal sammenlignet med elmåleren i timer hvor begge findes">Inverter vs. måler</th>
             </tr>
@@ -839,11 +905,14 @@
       <details class="col-help" style="margin-top:14px; background:var(--bg); border:1px solid var(--border); border-radius:8px; overflow:hidden;">
         <summary style="cursor:pointer; padding:10px 14px; font-size:0.85rem; color:var(--accent); font-weight:500; user-select:none;">Sådan regnes besparelsen</summary>
         <div style="padding:4px 14px 12px; font-size:0.85rem; color:var(--muted); line-height:1.6;">
-          <p style="margin:8px 0;">Hver time fordeles inverterens flows: solcellestrøm går først til huset, derefter til batteriet og til sidst til nettet. Batteriet dækker huset før nettet gør. Opladning ud over solcelleoverskuddet regnes som opladning fra nettet.</p>
-          <p style="margin:8px 0;"><strong style="color:var(--text)">Direkte</strong>: sol brugt i huset med det samme × købspris.</p>
-          <p style="margin:8px 0;"><strong style="color:var(--text)">Overskud</strong>: solcelleoverskud × salgspris, også den del der blev lagt på batteriet. Det er hvad den strøm kunne have indbragt ved salg.</p>
-          <p style="margin:8px 0;"><strong style="color:var(--text)">Batteri</strong>: værdien af batteristrøm, da den blev brugt (× købspris i den time), minus ladning fra nettet (× købspris dengang) og minus mistet salg af den sol der blev ladet. Batteriets tab er dermed indregnet.</p>
-          <p style="margin:8px 0;"><strong style="color:var(--text)">Afvigelse</strong>: forskellen mellem elmålerens og inverterens net-tal plus tab som fordelingen ikke fanger. Er den stor, så tjek afstemningen i sidste kolonne.</p>
+          <p style="margin:8px 0;"><strong style="color:var(--text)">Besparelse</strong> = uden anlæg − faktisk, time for time. <em>Uden anlæg</em> = husets forbrug × købspris. <em>Faktisk</em> = købt fra nettet × købspris − solgt til nettet × salgspris.</p>
+          <p style="margin:8px 0;"><strong style="color:var(--text)">Fordeling.</strong> Inverteren måler kun summer pr. time (sol, forbrug, batteri ind/ud). Appen fordeler dem med en fast regel: solstrøm går først til huset, derefter til batteriet, og resten sælges. Batteriet dækker huset før nettet gør. Lader batteriet mere end solcelleoverskuddet, regnes resten som ladet fra nettet. Det er en model, ikke en måling.</p>
+          <p style="margin:8px 0;"><strong style="color:var(--text)">Solstrøm brugt direkte</strong> = sol → hus × købspris. Det du undgik at købe.</p>
+          <p style="margin:8px 0;"><strong style="color:var(--text)">Solstrømmens salgsværdi</strong> = (sol → net + sol → batteri) × salgspris. Også solstrøm, der blev lagt på batteriet, tælles her — til den pris, den kunne have indbragt ved salg.</p>
+          <p style="margin:8px 0;"><strong style="color:var(--text)">Batteriets merværdi</strong> = batteri → hus × købspris + batteri → net × salgspris − net → batteri × købspris − sol → batteri × salgspris. Altså hvad batteristrømmen var værd, da den blev brugt, minus hvad den kostede: købsprisen for strøm fra nettet og den salgsværdi, solstrømmen allerede er talt med for. Batteriets tab er dermed indregnet. Den kan være negativ i timer, hvor der lades fra nettet.</p>
+          <p style="margin:8px 0;"><strong style="color:var(--text)">Måleafvigelse og tab</strong> = besparelsen minus de tre poster. Det er forskellen mellem elmålerens og inverterens net-tal plus tab, fordelingen ikke fanger. Er den stor, så tjek afstemningen i sidste kolonne.</p>
+          <p style="margin:8px 0;"><strong style="color:var(--text)">Forbrug kun elmåleren så.</strong> Har elmåleren registreret mere købt strøm end inverteren i en time, lægges forskellen til husets forbrug. Det sker fx, når inverteren går i dvale med tomt batteri og huset får strøm direkte fra nettet — inverteren melder så 0 W, selvom der bruges strøm. Strømmen koster det samme med og uden anlæg, så besparelsen ændres ikke, men den ender ikke som afvigelse. Mængden vises i sidste kolonne i månedstabellen.</p>
+          <p style="margin:8px 0;">Vil du følge regnestykket for en enkelt dag, så brug <em>Gennemgang af et døgn</em> ovenfor.</p>
         </div>
       </details>
     </div>
@@ -1707,13 +1776,15 @@ function analyzeConsumption(forbrugRows, spotPrices, tariffData, tariffs) {
 //             − net→batteri × købspris − PV→batteri × salgspris
 //   residual = resten: inverter-/batteritab der ikke er fanget af fordelingen
 //              + forskel mellem inverterens og elmålerens net-tal
+// unseenLoad = køb elmåleren så, men inverteren ikke (fx inverter i dvale) — lagt til
+//              forbruget i "uden anlæg", så det ikke ender i residual.
 //
 // grid (valgfri) = { imp: Map<hourKey,kWh>, exp: Map<hourKey,kWh> } fra eloverblik
 // (D07/D06). Hvor en time findes i eloverblik, er den autoritativ for "faktisk".
-const SAVINGS_FLOWS = ['load', 'pv', 'pvToLoad', 'pvToBat', 'pvToGrid', 'gridToBat', 'gridToLoad', 'batToLoad', 'batToGrid',
+const SAVINGS_FLOWS = ['load', 'unseenLoad', 'pv', 'pvToLoad', 'pvToBat', 'pvToGrid', 'gridToBat', 'gridToLoad', 'batToLoad', 'batToGrid',
   'batIn', 'batOut', 'invGridIn', 'invGridOut', 'gridIn', 'gridOut', 'meterGridIn', 'meterGridOut', 'meterInvGridIn', 'meterInvGridOut'];
 const SAVINGS_KR = ['baseline', 'actual', 'savings', 'direct', 'surplus', 'battery', 'residual',
-  'gridToBatCost', 'pvToBatValue', 'batToLoadValue', 'batToGridValue'];
+  'gridToBatCost', 'pvToBatValue', 'batToLoadValue', 'batToGridValue', 'gridInCost', 'gridOutValue'];
 
 function emptySavingsBucket() {
   const b = { hours: 0, meterHours: 0, buyOereSum: 0, sellOereSum: 0 };
@@ -1745,6 +1816,7 @@ function analyzeSavings(invRows, spotPrices, tariffData, tariffs, grid) {
   const total = emptySavingsBucket();
   const months = new Map();
   const profiles = new Map();   // "YYYY-MM" → 24 timer-på-døgnet buckets
+  const days = new Map();       // "YYYY-MM-DD" → 24 buckets (én pr. time; 02 kan have 2 timer ved vintertid)
   let missingPrices = 0, skippedNoLoad = 0;
 
   for (const r of invRows) {
@@ -1761,8 +1833,15 @@ function analyzeSavings(invRows, spotPrices, tariffData, tariffs, grid) {
     const gridIn  = hasMeter ? grid.imp.get(r.hourKey) : f.invGridIn;
     const gridOut = hasMeter ? grid.exp.get(r.hourKey) : f.invGridOut;
 
-    const baseline = f.load * pb;
-    const actual = gridIn * pb - gridOut * ps;
+    // Forbrug kun elmåleren så: har måleren registreret mere købt strøm end inverteren,
+    // er differencen forbrug uden om inverterens målinger (fx når inverteren går i dvale
+    // med tomt batteri og huset forsynes direkte fra nettet — den rapporterer så 0 W).
+    // Det lægges til forbruget: det koster det samme med og uden anlæg, så det flytter
+    // ikke besparelsen, men holder det ude af "måleafvigelse".
+    const unseenLoad = hasMeter ? Math.max(0, gridIn - f.invGridIn) : 0;
+    const baseline = (f.load + unseenLoad) * pb;
+    const gridInCost = gridIn * pb, gridOutValue = gridOut * ps;
+    const actual = gridInCost - gridOutValue;
     const savings = baseline - actual;
     const direct = f.pvToLoad * pb;
     const surplus = (f.pvToGrid + f.pvToBat) * ps;
@@ -1773,14 +1852,20 @@ function analyzeSavings(invRows, spotPrices, tariffData, tariffs, grid) {
     const battery = batToLoadValue + batToGridValue - gridToBatCost - pvToBatValue;
     const residual = savings - direct - surplus - battery;
 
-    const h = { ...f, gridIn, gridOut, baseline, actual, savings, direct, surplus, battery, residual,
-      gridToBatCost, pvToBatValue, batToLoadValue, batToGridValue };
-    const mKey = r.hourKey.slice(0, 7);
+    const h = { ...f, unseenLoad, gridIn, gridOut, baseline, actual, savings, direct, surplus, battery, residual,
+      gridToBatCost, pvToBatValue, batToLoadValue, batToGridValue, gridInCost, gridOutValue };
+    const mKey = r.hourKey.slice(0, 7), dKey = r.hourKey.slice(0, 10);
     if (!months.has(mKey)) months.set(mKey, emptySavingsBucket());
     if (!profiles.has(mKey)) profiles.set(mKey, Array.from({ length: 24 }, emptySavingsBucket));
+    if (!days.has(dKey)) days.set(dKey, Array.from({ length: 24 }, emptySavingsBucket));
     const hod = parseInt(r.hourKey.slice(11, 13), 10);
 
-    for (const b of [total, months.get(mKey), profiles.get(mKey)[hod]]) {
+    // Døgn-buckets (én pr. time på døgnet) til dagsgennemgangen: + ladetilstand og datahuller
+    const dayB = days.get(dKey)[hod];
+    if (r.soc != null) dayB.soc = r.soc;
+    if (r.batIn == null || r.batOut == null) dayB.batMissing = (dayB.batMissing || 0) + 1;
+
+    for (const b of [total, months.get(mKey), profiles.get(mKey)[hod], dayB]) {
       b.hours++;
       b.buyOereSum += pb * 100;
       b.sellOereSum += ps * 100;
@@ -1797,7 +1882,7 @@ function analyzeSavings(invRows, spotPrices, tariffData, tariffs, grid) {
   if (missingPrices) log.warn(`Besparelse: ${missingPrices} inverter-timer manglede spotpris — sprunget over`);
   if (skippedNoLoad) log.warn(`Besparelse: ${skippedNoLoad} timer uden kendt forbrug (load_kwh) — sprunget over`);
   log.info(`Besparelse: ${total.hours} timer, ${months.size} måneder, ${total.meterHours} timer med eloverblik-net`);
-  return { total, months, profiles };
+  return { total, months, profiles, days };
 }
 // ==ANALYSIS_CORE_END==
 
@@ -2415,11 +2500,12 @@ function updateBillTotalsRow() {
 // ─── Besparelse (rendering) ──────────────────────────────────────────────────
 
 const SAVINGS_SERIES = [
-  { key: 'direct',   label: 'Direkte selvforbrug',   color: 'var(--s-sol)' },
-  { key: 'surplus',  label: 'Overskud (salgsværdi)', color: 'var(--s-surplus)' },
-  { key: 'battery',  label: 'Batteri',               color: 'var(--s-battery)' },
-  { key: 'residual', label: 'Afvigelse',             color: 'var(--s-residual)' },
+  { key: 'direct',   label: 'Solstrøm brugt direkte',   color: 'var(--s-sol)' },
+  { key: 'surplus',  label: 'Solstrømmens salgsværdi',  color: 'var(--s-surplus)' },
+  { key: 'battery',  label: 'Batteriets merværdi',      color: 'var(--s-battery)' },
+  { key: 'residual', label: 'Måleafvigelse og tab',     color: 'var(--s-residual)' },
 ];
+const krPerKwh = (kr, kwh) => kwh > 0.0005 ? (kr / kwh).toLocaleString('da-DK', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '–';
 const MONTH_SHORT = ['Jan','Feb','Mar','Apr','Maj','Jun','Jul','Aug','Sep','Okt','Nov','Dec'];
 const fmtKrInt = v => (v < 0 ? '−' : '') + Math.abs(v).toLocaleString('da-DK', { maximumFractionDigits: 0 }) + ' kr';
 const fmtKr2 = v => (v < 0 ? '−' : '') + Math.abs(v).toLocaleString('da-DK', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' kr';
@@ -2562,22 +2648,24 @@ function renderSavings() {
   const months = [...s.months.entries()].sort(([a], [b]) => a.localeCompare(b));
 
   // KPI'er
-  const chargeCost = t.batIn > 0 ? (t.gridToBatCost + t.pvToBatValue) / t.batIn : null;
-  const dischargeValue = t.batOut > 0 ? (t.batToLoadValue + t.batToGridValue) / t.batOut : null;
   const period = `${months[0][0]} → ${months[months.length - 1][0]}`;
   const kpis = [
     { label: 'Besparelse i alt', value: fmtKrInt(t.savings), cls: t.savings >= 0 ? 'green' : 'red',
       sub: `${period} · uden anlæg ${fmtKrInt(t.baseline)}, faktisk ${fmtKrInt(t.actual)}` },
-    { label: 'Direkte selvforbrug', value: fmtKrInt(t.direct), sub: `${fmtKwh(t.pvToLoad)} sol brugt med det samme` },
-    { label: 'Overskud (salgsværdi)', value: fmtKrInt(t.surplus), sub: `${fmtKwh(t.pvToGrid + t.pvToBat)} solcelleoverskud` },
-    { label: 'Batteri (tidsforskydning)', value: fmtKrInt(t.battery), cls: t.battery >= 0 ? 'green' : 'red',
-      sub: `${fmtKwh(t.gridToBat)} ladet fra net · ${fmtKwh(t.pvToBat)} fra sol` },
+    { label: 'Solstrøm brugt direkte', value: fmtKrInt(t.direct),
+      sub: `${fmtKwh(t.pvToLoad)} sol direkte i huset · undgik købspris ${krPerKwh(t.direct, t.pvToLoad)} kr/kWh i gns.` },
+    { label: 'Solstrømmens salgsværdi', value: fmtKrInt(t.surplus),
+      sub: `${fmtKwh(t.pvToGrid)} solgt + ${fmtKwh(t.pvToBat)} lagt på batteriet · salgspris ${krPerKwh(t.surplus, t.pvToGrid + t.pvToBat)} kr/kWh` },
   ];
-  if (chargeCost != null && dischargeValue != null) {
-    kpis.push({ label: 'Batteri: ladet → brugt', value: `${fmtKr2(chargeCost).replace(' kr', '')} → ${fmtKr2(dischargeValue)}`,
-      // ud/ind er kun virkningsgraden over lange perioder — over få dage dominerer ændringen i ladetilstand
-      sub: `kr/kWh i gns. · afladet/ladet ${(t.batOut / t.batIn * 100).toFixed(0)} %` });
+  if (t.batIn > 0 || t.batOut > 0) {
+    // ud/ind er kun virkningsgraden over lange perioder — over få dage dominerer ændringen i ladetilstand
+    kpis.push({ label: 'Batteriets merværdi', value: fmtKrInt(t.battery), cls: t.battery >= 0 ? 'green' : 'red',
+      sub: `brugt til ${krPerKwh(t.batToLoadValue + t.batToGridValue, t.batOut)} kr/kWh · ladet til ${krPerKwh(t.gridToBatCost + t.pvToBatValue, t.batIn)} kr/kWh ` +
+        `(${fmtKwh(t.gridToBat)} fra net, ${fmtKwh(t.pvToBat)} fra sol) · afladet/ladet ${(t.batOut / t.batIn * 100).toFixed(0)} %` });
   }
+  kpis.push({ label: 'Måleafvigelse og tab', value: fmtKrInt(t.residual),
+    sub: 'forskel mellem elmåler og inverter + inverterens tab' +
+      (t.unseenLoad >= 1 ? ` · ${fmtKwh(t.unseenLoad)} forbrug, som kun elmåleren så, er lagt til forbruget` : '') });
   document.getElementById('savingsKpis').innerHTML = kpis.map(k =>
     `<div class="kpi"><div class="kpi-label">${k.label}</div><div class="kpi-value ${k.cls || ''}">${k.value}</div>` +
     (k.sub ? `<div style="font-size:0.75rem;color:var(--muted);margin-top:4px">${k.sub}</div>` : '') + '</div>'
@@ -2594,12 +2682,17 @@ function renderSavings() {
       `<div style="border-top:1px solid var(--border);margin:4px 0"></div>` + tipRow('Besparelse', fmtKr2(m.savings)) +
       tipRow('Uden anlæg', fmtKr2(m.baseline)) + tipRow('Faktisk', fmtKr2(m.actual)) +
       tipRow('Timer med data', m.hours.toLocaleString('da-DK'));
+    monthTips[i] += `<div style="color:var(--muted);margin-top:4px">Klik for døgnprofil og dagsgennemgang</div>`;
     return { label: MONTH_SHORT[+mo - 1], sub: (mo === '01' || i === 0) ? yr : '', values: m, total: m.savings };
   });
   const chartEl = document.getElementById('savingsChart');
   chartEl.innerHTML = svgStackedBars({ cols, series: SAVINGS_SERIES, height: 240,
     fmtAxis: v => v.toLocaleString('da-DK') + ' kr', totalLabel: v => fmtKrInt(v).replace(' kr', '') });
   bindVizTips(chartEl, monthTips);
+  chartEl.querySelectorAll('.hit').forEach(el => {
+    el.classList.add('click');
+    el.addEventListener('click', () => selectSavingsMonth(months[+el.dataset.tip][0]));
+  });
 
   // Døgnprofil — vælg måned (default seneste)
   const sel = document.getElementById('profileMonth');
@@ -2609,16 +2702,25 @@ function renderSavings() {
   sel.onchange = () => renderSavingsProfile(sel.value);
   renderSavingsProfile(sel.value);
 
+  // Dagsgennemgang — default seneste hele døgn (bevar valg ved gen-render)
+  const dayKeys = [...s.days.keys()].sort();
+  const pick = document.getElementById('dayPick');
+  pick.min = dayKeys[0]; pick.max = dayKeys[dayKeys.length - 1];
+  const fullDays = dayKeys.filter(d => s.days.get(d).reduce((n, b) => n + b.hours, 0) >= 23);
+  renderSavingsDay(s.days.has(pick.value) ? pick.value : (fullDays[fullDays.length - 1] || dayKeys[dayKeys.length - 1]));
+
   // Månedstabel
   const pct = (a, b) => b > 0 ? ((a / b - 1) * 100) : null;
   const fmtPct = v => v == null ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(1).replace('.', ',') + ' %';
   const cell = (v, colorize) => `<td${colorize ? ` style="color:${v >= 0 ? 'var(--green)' : 'var(--red)'}"` : ''}>${fmtKr2(v)}</td>`;
   const rowHtml = (label, m, bold) => {
+    const unseen = m.unseenLoad >= 1
+      ? ` · <span style="color:var(--accent)" title="Købt ifølge elmåleren, men ikke set af inverteren — lagt til forbruget">${fmtKwh(m.unseenLoad)} uden om inverteren</span>` : '';
     const rec = m.meterHours
-      ? `<span title="${m.meterHours} timer med både inverter- og elmåler-data">ind ${fmtPct(pct(m.meterInvGridIn, m.meterGridIn))} · ud ${fmtPct(pct(m.meterInvGridOut, m.meterGridOut))}</span>`
+      ? `<span title="${m.meterHours} timer med både inverter- og elmåler-data">ind ${fmtPct(pct(m.meterInvGridIn, m.meterGridIn))} · ud ${fmtPct(pct(m.meterInvGridOut, m.meterGridOut))}</span>${unseen}`
       : '<span style="color:var(--muted)">ingen elmåler-data</span>';
     return `<tr${bold ? ' style="border-top:2px solid var(--border);font-weight:600"' : ''}>
-      <td>${label}</td><td>${fmtKwh(m.load)}</td><td>${fmtKwh(m.pv)}</td>
+      <td>${label}</td><td>${fmtKwh(m.load + m.unseenLoad)}</td><td>${fmtKwh(m.pv)}</td>
       <td>${fmtKr2(m.baseline)}</td><td>${fmtKr2(m.actual)}</td>${cell(m.savings, true)}
       <td>${fmtKr2(m.direct)}</td><td>${fmtKr2(m.surplus)}</td>${cell(m.battery, true)}
       <td style="color:var(--muted)">${fmtKr2(m.residual)}</td><td>${fmtKwh(m.gridToBat, 1)}</td><td>${rec}</td>
@@ -2631,13 +2733,29 @@ function renderSavings() {
 function renderSavingsProfile(monthKey) {
   const buckets = state.savings?.profiles.get(monthKey);
   if (!buckets) return;
-  const avg = (b, k) => b.hours ? b[k] / b.hours : 0;
+  renderFlowCharts(buckets, { mode: 'avg', legendId: 'profileLegend', chartId: 'profileChart', priceId: 'profilePriceChart' });
+}
+
+// Klik på en måned i månedsgrafen: døgnprofil + dagsgennemgang springer til måneden
+function selectSavingsMonth(monthKey) {
+  const sel = document.getElementById('profileMonth');
+  if ([...sel.options].some(o => o.value === monthKey)) { sel.value = monthKey; renderSavingsProfile(monthKey); }
+  const days = [...state.savings.days.keys()].filter(d => d.startsWith(monthKey)).sort();
+  const full = days.filter(d => state.savings.days.get(d).reduce((n, b) => n + b.hours, 0) >= 23);
+  if (days.length) renderSavingsDay(full[full.length - 1] || days[days.length - 1]);
+  document.getElementById('profileMonth').closest('div[style]').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Flow-graf (hvor husets strøm kom fra / hvad batteriet blev ladet med) + købspris.
+// mode 'avg' = gennemsnitligt døgn i en måned; 'sum' = ét konkret døgn.
+function renderFlowCharts(buckets, { mode, legendId, chartId, priceId }) {
+  const avg = mode === 'avg' ? (b, k) => b.hours ? b[k] / b.hours : 0 : (b, k) => b[k] || 0;
   const series = [
     { key: 'sol',     label: 'Sol',     color: 'var(--s-sol)' },
     { key: 'battery', label: 'Batteri', color: 'var(--s-battery)' },
     { key: 'grid',    label: 'Net',     color: 'var(--s-grid)' },
   ];
-  renderLegend(document.getElementById('profileLegend'), series,
+  renderLegend(document.getElementById(legendId), series,
     '<span>· over aksen: husets forbrug dækket af … · under aksen: batteriet ladet med …</span>');
   // Samme serie-nøgle bruges over (forbrug dækket af) og under (opladning fra) aksen
   const stackSeries = [
@@ -2647,11 +2765,12 @@ function renderSavingsProfile(monthKey) {
   const tips = [];
   const cols = buckets.map((b, h) => {
     const v = {
-      pvToLoad: avg(b, 'pvToLoad'), batToLoad: avg(b, 'batToLoad'), gridToLoad: avg(b, 'gridToLoad'),
+      pvToLoad: avg(b, 'pvToLoad'), batToLoad: avg(b, 'batToLoad'), gridToLoad: avg(b, 'gridToLoad') + avg(b, 'unseenLoad'),
       pvToBat: -avg(b, 'pvToBat'), gridToBat: -avg(b, 'gridToBat'),
     };
     const k = n => n.toLocaleString('da-DK', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' kWh';
-    tips[h] = `<div class="tip-title">kl. ${String(h).padStart(2, '0')}–${String((h + 1) % 24).padStart(2, '0')} · gns. ${b.hours} dage</div>` +
+    const when = mode === 'avg' ? ` · gns. ${b.hours} dage` : b.hours > 1 ? ` · ${b.hours} timer (vintertid)` : '';
+    tips[h] = `<div class="tip-title">kl. ${String(h).padStart(2, '0')}–${String((h + 1) % 24).padStart(2, '0')}${when}</div>` +
       `<div style="color:var(--muted);margin:2px 0">Forbrug dækket af</div>` +
       tipRow('Sol', k(v.pvToLoad), series[0].color) + tipRow('Batteri', k(v.batToLoad), series[1].color) + tipRow('Net', k(v.gridToLoad), series[2].color) +
       `<div style="color:var(--muted);margin:2px 0">Batteri ladet med</div>` +
@@ -2661,18 +2780,171 @@ function renderSavingsProfile(monthKey) {
       tipRow('Salgspris', fmtKr2(b.hours ? b.sellOereSum / b.hours / 100 : 0) + '/kWh');
     return { label: String(h).padStart(2, '0'), values: v };
   });
-  const el = document.getElementById('profileChart');
+  const el = document.getElementById(chartId);
   el.innerHTML = svgStackedBars({ cols, series: stackSeries, height: 230,
     fmtAxis: v => v.toLocaleString('da-DK', { maximumFractionDigits: 2 }) + ' kWh' });
   bindVizTips(el, tips);
 
-  const priceEl = document.getElementById('profilePriceChart');
+  const priceEl = document.getElementById(priceId);
   const prices = buckets.map(b => b.hours ? b.buyOereSum / b.hours / 100 : null);
-  priceEl.innerHTML = `<div style="font-size:0.78rem;color:var(--muted);margin:0 0 2px 56px">Gns. købspris (kr/kWh inkl. tariffer og moms)</div>` +
+  const sells = buckets.map(b => b.hours ? b.sellOereSum / b.hours / 100 : null);
+  priceEl.innerHTML = `<div style="font-size:0.78rem;color:var(--muted);margin:0 0 2px 56px">${mode === 'avg' ? 'Gns. købspris' : 'Købspris'} (kr/kWh inkl. tariffer og moms)</div>` +
     svgHourLine({ values: prices, color: 'var(--s-grid)', height: 110,
       fmtAxis: v => v.toLocaleString('da-DK', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) });
   bindVizTips(priceEl, prices.map((p, h) => `<div class="tip-title">kl. ${String(h).padStart(2, '0')}</div>` +
-    tipRow('Gns. købspris', p == null ? '—' : fmtKr2(p) + '/kWh')));
+    tipRow(mode === 'avg' ? 'Gns. købspris' : 'Købspris', p == null ? '—' : fmtKr2(p) + '/kWh') +
+    tipRow(mode === 'avg' ? 'Gns. salgspris' : 'Salgspris', sells[h] == null ? '—' : fmtKr2(sells[h]) + '/kWh')));
+}
+
+// ─── Dagsgennemgang ───────────────────────────────────────────────────────────
+// Viser hele regnestykket for ét døgn: de to regninger, de fire poster med kWh ×
+// gennemsnitspris, besparelsen time for time, flows, pris og en timetabel.
+function sumBuckets(buckets) {
+  const t = emptySavingsBucket();
+  for (const b of buckets) for (const k of Object.keys(t)) t[k] += b[k] || 0;
+  return t;
+}
+
+function renderSavingsDay(dayKey) {
+  const s = state.savings;
+  const buckets = s?.days.get(dayKey);
+  if (!buckets) return;
+  const dayKeys = [...s.days.keys()].sort();
+  const pos = dayKeys.indexOf(dayKey);
+  const pick = document.getElementById('dayPick'), prevBtn = document.getElementById('dayPrev'), nextBtn = document.getElementById('dayNext');
+  pick.value = dayKey;
+  prevBtn.disabled = pos <= 0; nextBtn.disabled = pos >= dayKeys.length - 1;
+  prevBtn.onclick = () => pos > 0 && renderSavingsDay(dayKeys[pos - 1]);
+  nextBtn.onclick = () => pos < dayKeys.length - 1 && renderSavingsDay(dayKeys[pos + 1]);
+  pick.onchange = () => {
+    const v = pick.value;
+    if (s.days.has(v)) return renderSavingsDay(v);
+    // Ingen data den dag: nærmeste dag med data
+    const near = dayKeys.reduce((a, d) => Math.abs(Date.parse(d) - Date.parse(v)) < Math.abs(Date.parse(a) - Date.parse(v)) ? d : a, dayKeys[0]);
+    renderSavingsDay(near);
+  };
+
+  const t = sumBuckets(buckets);
+  const hasBattery = s.total.batIn > 0 || s.total.batOut > 0;
+  const kwh = (v, d = 2) => fmtKwh(v, d);
+  const kr = v => fmtKr2(v);
+  const at = (krSum, kwhSum) => `× ${krPerKwh(krSum, kwhSum)} kr/kWh`;
+  const row = (label, calc, value, cls = '', color) =>
+    `<div class="eq-row ${cls}"><span class="lbl">${color ? `<i class="sw" style="background:${color}"></i>` : ''}${label}</span><span class="calc">${calc}</span><span class="val">${value}</span></div>`;
+  const dateLabel = new Date(dayKey + 'T12:00:00').toLocaleDateString('da-DK', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+  const meterNote = t.meterHours === t.hours ? 'Køb og salg er elmålerens tal (eloverblik).'
+    : t.meterHours === 0 ? 'Køb og salg er inverterens tal (ingen elmåler-data for dagen).'
+    : `Køb og salg er elmålerens tal i ${t.meterHours} af ${t.hours} timer, ellers inverterens.`;
+
+  // Trin 1: de to regninger
+  const step1 =
+    `<div class="day-step"><h4>1 · To regninger for ${dateLabel}</h4><div class="day-eq">` +
+    row('Uden anlæg', `${kwh(t.load + t.unseenLoad, 1)} forbrug${t.unseenLoad >= 0.05 ? ` (heraf ${kwh(t.unseenLoad, 1)} kun set af elmåleren)` : ''} ${at(t.baseline, t.load + t.unseenLoad)} (købspris)`, kr(t.baseline)) +
+    row('Faktisk: købt fra nettet', `${kwh(t.gridIn, 1)} ${at(t.gridInCost, t.gridIn)}`, kr(t.gridInCost), 'sub') +
+    row('Faktisk: solgt til nettet', `${kwh(t.gridOut, 1)} ${at(t.gridOutValue, t.gridOut)} (salgspris)`, '−' + kr(t.gridOutValue), 'sub') +
+    row('Faktisk i alt', '', kr(t.actual)) +
+    row('Besparelse', 'uden anlæg − faktisk', kr(t.savings), 'sum') +
+    `</div><p>${meterNote} Købsprisen er spot + tariffer + afgift, alt med moms. Salgsprisen er spot minus indfødningstarif og handlerens gebyr. Begge skifter time for time — tallene ovenfor er døgnets vægtede gennemsnit.</p></div>`;
+
+  // Trin 2: hvor besparelsen kom fra
+  const pvSurplus = t.pvToGrid + t.pvToBat;
+  let batRows = '';
+  if (hasBattery) {
+    batRows =
+      row('Batteriets merværdi', '', kr(t.battery), '', 'var(--s-battery)') +
+      row('+ brugt i huset', `${kwh(t.batToLoad)} ${at(t.batToLoadValue, t.batToLoad)} (købspris da den blev brugt)`, kr(t.batToLoadValue), 'sub') +
+      (t.batToGrid > 0.005 ? row('+ solgt fra batteriet', `${kwh(t.batToGrid)} ${at(t.batToGridValue, t.batToGrid)} (salgspris)`, kr(t.batToGridValue), 'sub') : '') +
+      row('− ladet fra nettet', `${kwh(t.gridToBat)} ${at(t.gridToBatCost, t.gridToBat)} (købspris da den blev ladet)`, '−' + kr(t.gridToBatCost), 'sub') +
+      (t.pvToBat > 0.005 ? row('− sol lagt på batteriet', `${kwh(t.pvToBat)} ${at(t.pvToBatValue, t.pvToBat)} (salgsværdien — allerede talt med ovenfor)`, '−' + kr(t.pvToBatValue), 'sub') : '');
+  }
+  const meterDiff = t.meterHours
+    ? `elmåler: købt ${kwh(t.meterGridIn)}, solgt ${kwh(t.meterGridOut)} · inverter: ${kwh(t.meterInvGridIn)} / ${kwh(t.meterInvGridOut)}`
+    : 'tab i inverter og batteri som fordelingen ikke fanger';
+  const step2 =
+    `<div class="day-step"><h4>2 · Hvor besparelsen kom fra</h4><div class="day-eq">` +
+    row('Solstrøm brugt direkte', `${kwh(t.pvToLoad)} ${at(t.direct, t.pvToLoad)} (købspris du undgik)`, kr(t.direct), '', 'var(--s-sol)') +
+    row('Solstrømmens salgsværdi', `(${kwh(t.pvToGrid)} solgt + ${kwh(t.pvToBat)} til batteriet) ${at(t.surplus, pvSurplus)} (salgspris)`, kr(t.surplus), '', 'var(--s-surplus)') +
+    batRows +
+    row('Måleafvigelse og tab', meterDiff, kr(t.residual), '', 'var(--s-residual)') +
+    row('Besparelse', 'summen af de fire poster', kr(t.savings), 'sum') +
+    `</div>` +
+    (hasBattery && t.pvToBat > 0.005 ? `<p>Sol, der lægges på batteriet, tælles med til salgspris under salgsværdien — det er hvad den kunne have indbragt. Batteriet får derfor kun æren for det, det lægger oveni: forskellen mellem købsprisen, da strømmen blev brugt, og salgsprisen.</p>` : '') +
+    `</div>`;
+
+  // Noter: ladetilstand, negative timer, huller
+  const notes = [];
+  const hh = h => `kl. ${String(h).padStart(2, '0')}`;
+  const socs = buckets.map((b, h) => b.soc != null && b.hours ? [h, b.soc] : null).filter(Boolean);
+  if (hasBattery && socs.length) {
+    const [h0, s0] = socs[0], [h1, s1] = socs[socs.length - 1];
+    const min = Math.min(...socs.map(x => x[1])), max = Math.max(...socs.map(x => x[1]));
+    notes.push(`Batteriet var på ${s0} % efter ${hh(h0)} og ${s1} % efter ${hh(h1)} (laveste ${min} %, højeste ${max} %). ` +
+      'Strøm, der ligger på batteriet ved midnat, er betalt i dag men giver først værdi i morgen — derfor går et enkelt døgn sjældent helt op. Over en måned udligner det sig.');
+  }
+  const negHours = buckets.map((b, h) => b.hours && b.savings < -0.05 ? h : null).filter(h => h != null);
+  if (negHours.length) {
+    const charging = negHours.filter(h => buckets[h].gridToBat > 0.05);
+    notes.push(`Besparelsen var negativ ${compressHours(negHours)}` +
+      (charging.length ? '. Her blev batteriet ladet fra nettet — en investering, der tjenes hjem, når strømmen bruges i dyre timer.' : '.'));
+  }
+  const unseenHours = buckets.map((b, h) => b.unseenLoad >= 0.05 ? h : null).filter(h => h != null);
+  if (t.unseenLoad >= 0.1) {
+    const sleeping = unseenHours.filter(h => buckets[h].load < 0.01);
+    notes.push(`${kwh(t.unseenLoad, 1)} købt strøm (${compressHours(unseenHours)}) blev kun målt af elmåleren` +
+      (sleeping.length ? ` — inverteren rapporterede 0 W ${sleeping.length === unseenHours.length ? 'i de timer' : `${compressHours(sleeping)}`}, typisk fordi den gik i dvale med tomt batteri, mens huset fik strøm direkte fra nettet` : '') +
+      '. Det er lagt til forbruget i begge regninger, så det ikke påvirker besparelsen.');
+  }
+  const missBat = buckets.map((b, h) => b.batMissing ? h : null).filter(h => h != null);
+  if (hasBattery && missBat.length) notes.push(`Batteridata mangler ${compressHours(missBat)} — de timer er regnet, som om batteriet stod stille.`);
+  // Sidste søndag i marts findes kl. 02 ikke (sommertid) — det er ikke et hul
+  const springDst = /-03-(2[5-9]|3[01])$/.test(dayKey) && new Date(dayKey + 'T12:00:00Z').getUTCDay() === 0;
+  const missing = buckets.map((b, h) => b.hours || (springDst && h === 2) ? null : h).filter(h => h != null);
+  if (missing.length && missing.length < 24) notes.push(`Ingen data ${compressHours(missing)} — de timer er ikke med i døgnet.`);
+
+  document.getElementById('dayExplain').innerHTML = `<div class="day-steps">${step1}${step2}</div>` +
+    (notes.length ? `<ul class="day-notes">${notes.map(n => `<li>${n}</li>`).join('')}</ul>` : '');
+
+  // Besparelse time for time
+  renderLegend(document.getElementById('dayLegend'), SAVINGS_SERIES, '<span>· hold musen over en time for regnestykket</span>');
+  const tips = [];
+  const cols = buckets.map((b, h) => {
+    tips[h] = `<div class="tip-title">kl. ${String(h).padStart(2, '0')}–${String((h + 1) % 24).padStart(2, '0')}${b.hours > 1 ? ' · 2 timer (vintertid)' : ''}</div>` +
+      (b.hours ? SAVINGS_SERIES.map(se => tipRow(se.label, fmtKr2(b[se.key]), se.color)).join('') +
+        `<div style="border-top:1px solid var(--border);margin:4px 0"></div>` +
+        tipRow('Besparelse', fmtKr2(b.savings)) + tipRow('Uden anlæg', fmtKr2(b.baseline)) + tipRow('Faktisk', fmtKr2(b.actual)) +
+        tipRow('Købspris', fmtKr2(b.buyOereSum / b.hours / 100) + '/kWh') + tipRow('Salgspris', fmtKr2(b.sellOereSum / b.hours / 100) + '/kWh')
+        : '<div style="color:var(--muted)">ingen data</div>');
+    return { label: String(h).padStart(2, '0'), values: b };
+  });
+  const dayEl = document.getElementById('dayChart');
+  dayEl.innerHTML = svgStackedBars({ cols, series: SAVINGS_SERIES, height: 220,
+    fmtAxis: v => v.toLocaleString('da-DK', { maximumFractionDigits: 1 }) + ' kr' });
+  bindVizTips(dayEl, tips);
+
+  renderFlowCharts(buckets, { mode: 'sum', legendId: 'dayFlowLegend', chartId: 'dayFlowChart', priceId: 'dayPriceChart' });
+
+  // Timetabel
+  const n2 = v => (Math.abs(v || 0) < 0.005 ? 0 : v).toLocaleString('da-DK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const head = ['Kl.', 'Forbrug', 'Sol', ...(hasBattery ? ['Bat. ind', 'Bat. ud', 'SOC'] : []), 'Net ind', 'Net ud', 'Købspris', 'Salgspris',
+    'Uden anlæg', 'Faktisk', 'Besparelse', 'Sol direkte', 'Sol salgsv.', ...(hasBattery ? ['Batteri'] : []), 'Afvigelse'];
+  const tbl = document.getElementById('dayTable');
+  tbl.tHead.innerHTML = `<tr>${head.map(h => `<th class="th-static">${h}</th>`).join('')}</tr>` +
+    `<tr style="color:var(--muted)"><th></th>${head.slice(1).map((h, i) => {
+      const unit = i < (hasBattery ? 7 : 4) ? (h === 'SOC' ? '%' : 'kWh') : i < (hasBattery ? 9 : 6) ? 'kr/kWh' : 'kr';
+      return `<th class="th-static" style="font-weight:400;text-transform:none">${unit}</th>`; }).join('')}</tr>`;
+  const line = (label, b, bold) => {
+    if (!b.hours) return `<tr><td>${label}</td><td colspan="${head.length - 1}" style="text-align:left;color:var(--muted)">ingen data</td></tr>`;
+    const sav = `<td style="color:${b.savings >= 0 ? 'var(--green)' : 'var(--red)'}">${n2(b.savings)}</td>`;
+    return `<tr${bold ? ' style="border-top:2px solid var(--border);font-weight:600"' : ''}><td>${label}</td>` +
+      `<td${b.unseenLoad >= 0.05 ? ` style="color:var(--accent)" title="heraf ${n2(b.unseenLoad)} kWh kun set af elmåleren"` : ''}>${n2(b.load + b.unseenLoad)}</td><td>${n2(b.pv)}</td>` +
+      (hasBattery ? `<td>${b.batMissing ? '–' : n2(b.batIn)}</td><td>${b.batMissing ? '–' : n2(b.batOut)}</td><td>${bold || b.soc == null ? '' : b.soc}</td>` : '') +
+      `<td>${n2(b.gridIn)}</td><td>${n2(b.gridOut)}</td>` +
+      `<td>${bold ? krPerKwh(b.baseline, b.load) : n2(b.buyOereSum / b.hours / 100)}</td><td>${bold ? '' : n2(b.sellOereSum / b.hours / 100)}</td>` +
+      `<td>${n2(b.baseline)}</td><td>${n2(b.actual)}</td>${sav}<td>${n2(b.direct)}</td><td>${n2(b.surplus)}</td>` +
+      (hasBattery ? `<td>${n2(b.battery)}</td>` : '') + `<td style="color:var(--muted)">${n2(b.residual)}</td></tr>`;
+  };
+  tbl.tBodies[0].innerHTML = buckets.map((b, h) => line(String(h).padStart(2, '0'), b)).join('') + line('Døgn', t, true);
 }
 
 function fmtDKK(v) { return v.toFixed(2).replace('.', ',') + ' kr'; }
@@ -3239,7 +3511,7 @@ function compressHours(hours) {
     else { ranges.push([start, prev]); start = sorted[i]; prev = sorted[i]; }
   }
   ranges.push([start, prev]);
-  return 'kl. ' + ranges.map(([s, e]) => `${String(s).padStart(2,'0')}-${String((e+1)%24).padStart(2,'0')}`).join(', ');
+  return 'kl. ' + ranges.map(([s, e]) => `${String(s).padStart(2,'0')}-${String(e + 1).padStart(2,'0')}`).join(', ');
 }
 
 function renderAutoDiscoveryStatus() {
