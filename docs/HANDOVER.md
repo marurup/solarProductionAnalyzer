@@ -87,7 +87,11 @@ Dette dokument beskriver hele projektets nuværende tilstand, så arbejdet kan f
   - Verificeret mod HA inden for 0,3 % (jun og nov 2026).
   - Posten i `data/energiflow-kilder.json` er sat til `klar` med GitHub Pages-URL. Push begge repos samtidig og slå Pages til på det nye.
 - **Næste eksportør: Home Assistant** (separat repo, navn ikke endeligt). Statisk side, der via HA-websocket (`recorder/statistics_during_period`, period `hour`) med URL + long-lived token henter energitællerne og skriver energiflow-CSV. Entiteter foreslås ud fra `device_class: energy` og mappes af brugeren. Dertil en Node-CLI med samme kode til HA på lokal http (https-sider må ikke åbne `ws://`). Dækker alt med en HA-integration, også SolarAssistant via MQTT. Ret posten i `data/energiflow-kilder.json` til `status: "klar"` + `url`, når den er ude. Senere: FoxESS Open API og Growatt (uofficiel) som egne eksportører.
-- **Verificér elforbrug-regninger** på samme grundige måde som produktionsafregningerne blev (2026-07-07). Sammenlign "Elforbrug-validering"-fanens beregnede månedsregning mod brugerens faktiske el-regninger (fx PDF-udtræk med `pdftotext -layout`). Tjek særligt: forbrugstariffer per time-på-døgnet (distribution), Energinet system+transmission, elafgift, leverandørtillæg (markup fra Strømligning), moms, og faste abonnementer (netselskab + elselskab, kr/md). Bekræft at kWh og totaler matcher regningerne.
+- **Leverandørtillæg pr. periode (produkthistorik).** Appen bruger i dag ét tillæg, nemlig det valgte Strømligning-produkt, for hele perioden. Brugere skifter produkt.
+  - Eksempel: Vindstød "Elforbundet fællesaftale" har tillæg 0, "TimeEl" ca. 31,2 øre/kWh ekskl. moms. Brugeren havde TimeEl jan–feb 2026, og det kommer igen fra 1. jan 2027.
+  - Forslag: en lille liste "fra dato → tillæg (øre/kWh) eller produkt" i Køb-panelet, gemt i konfigurationen og slået op pr. time i `lookupHourlyComponents` (feltet `markup.ranges` findes allerede).
+  - Påvirker "Elforbrug-validering" og besparelsen (tillæg × kWh dækket af sol/batteri). På brugerens data giver det +108 kr for jan–feb 2026.
+- ~~**Verificér elforbrug-regninger**~~ **Gjort 2026-11-19** for de variable dele (se "Verifikation af besparelsestallene"): kWh, tariffer, elafgift og tillæg passer på øret i 4 kvartaler. **Mangler:** faste abonnementer (Vindstød, N1 rådighed og abonnement, Energinet), som ikke indgår i besparelsen. Mangler også Elforbrug-validering-fanens månedstal stillet direkte mod regningerne, ikke kun via det uafhængige script.
 ### Data-fuldstændighed
 - **Videbæk Elnet** kunne ikke auto-matches til EDS (kun 34 af 38 Strømligning suppliers er backfillet). Skal undersøges hvor de findes i EDS.
 - **8 netselskaber har ingen indfødningskode** (`null` i supplier-map): N1 (har faktisk `C INDF` nu — fix kom efter), Aal El-Net, Cerius, Dinel, El-net Kongerslev, Elektrus, Elinor, Elnet Midt, m.fl. — disse netselskaber har enten reelt ingen separat C-indfødning, eller auto-discovery missede det. Verificér mod Strømlignings UI eller netselskabernes egne sider. **Note:** N1 fik faktisk `C INDF` ved seneste run; lokalt vises 26/34 med kode efter merge fra eksisterende filer.
@@ -119,6 +123,23 @@ Dette dokument beskriver hele projektets nuværende tilstand, så arbejdet kan f
     - Fra 19. dec til 5. jan, altså før firmwaren, var der 37 timer med tomt batteri og ingen sol uden dvale. Efter 10. jan er der 268 sådanne timer uden dvale, og inverteren ser 99 % af elmålerens køb.
     - Sandsynlig årsag: indstillingerne for natteopladning (AC-opladning/tidsplan) holder inverteren aktiv. SolarAssistants hul 6.–9. jan 2026 (77 t) er selve firmwareopdateringen.
     - Effekt i alt: 1.363 kWh lagt til forbruget. Afvigelsen gik fra −2.085 kr til +535 kr, og nov/dec 2025 gik fra negativ til positiv besparelse.
+- ✅ **Verifikation af besparelsestallene (2026-11-19)** på brugerens data, feb 2025–nov 2026.
+  - **Koden:** et uafhængigt script med egen parsing af SA-CSV, eloverblik, spot og tariffer gav samme resultat som `analyzeSavings` i alle 22 måneder (maks. 5·10⁻¹³ kr, total 29.112,24 kr).
+  - **Salg end-to-end:** elmålerens D06 × salgspris mod Vindstøds afregninger for 24 måneder (okt 2024–sep 2026) gav 5.980,42 mod 5.980,38 kr (±0,02 kr/md). Det verificerer spotpriser (også timesnit af 15-min-priser fra okt 2025), Energinet og N1-indfødning, moms og t4.
+  - **Køb end-to-end:** D07 (= E17, som regningerne afregnes på) mod Vindstøds 4 kvartalsregninger for forbrug (okt 2025–sep 2026, `test-data/regninger/`).
+    - **Tariffer** (N1-nettarif time for time + Energinet system + transmission) og **elafgift** (0,72 kr i 2025, 0,008 kr i 2026) passer på øret i alle 4 kvartaler.
+    - **Strøm** er ren spotpris på produktet *Elforbundet fællesaftale* (Q4 2025, mar–sep 2026: tillæg 0,00 øre).
+    - Jan–feb 2026 var brugeren på *TimeEl*. Det implicitte tillæg er **31,2 øre/kWh ekskl. moms** (726 kr over 2.328 kWh).
+    - Kontrakten overgår til TimeEl igen 1. jan 2027.
+    - Appen regner med ét leverandørtillæg ad gangen (Strømligning-produktet). Med TimeEl-tillægget i jan–feb 2026 stiger besparelsen 108 kr (29.112 → 29.220 kr).
+    - **Idé:** tillæg pr. periode (produkthistorik).
+  - **Stikprøver** af spotpris mod EDS (15. jun 2025, 20. jan 2026) gav 0,0000 øre i forskel.
+  - **Kendt usikkerhed: SA's "forbrug" er udregnet, ikke målt.** Energibalancen går op til 0,0 % hver måned, så inverterens konverteringstab og standby ligger i "forbrug" og dermed i "uden anlæg". Det overvurderer besparelsen med tab × købspris, men tabet kan ikke måles med de nuværende data.
+    - E18 er identisk med D06 og dermed ikke en brutto-produktionsmåler.
+    - Ved 3 % tab af sol + batteri ud (~32 MWh) bliver det ca. 1.000 kWh ≈ 2.000 kr af 29.112 kr.
+    - Batteri ud/ind er 100,7 % over perioden og 110–115 % i maj–jul 2025, så batterimålingerne er indbyrdes lidt skæve. SOC-hældning viser ~96 % virkningsgrad og ~19–20 kWh pr. 100 %.
+    - Til sammenligning lå husets forbrug i 2024 (E17, før anlægget) på samme niveau (±15 %) som SA's forbrug i 2025–26.
+  - **Huller:** timer uden inverter-data er ikke med i besparelsen. Det er 108 timer i alt, bl.a. 6.–9. jan 2026 (firmwareopdatering), så jan 2026 mangler ~1,24 kr salg og tilsvarende besparelse.
 - ✅ **Produktionsaftager-dropdown** — i Salg-panelet en `<select id="aftagerSelect">` over kendte elhandlere der køber overskudsstrøm; valg udfylder `t4` og viser note med abonnement, kilde, link og tjek-dato. "— Indtast selv —" lader brugeren skrive selv.
   - **Listen er en separat datafil: `data/produktionsaftagere.json`** (hentes med `fetch(..., {cache:'no-cache'})`). Felter pr. post: `navn`, `kategori` (`"alene"` = tegnes uanset elselskab, `"elkunde"` = kræver kundeforhold), `spread` (øre/kWh = t4; `null` = ukendt), `abonnement` (kr/md; 0 = gratis), `note`, `kilde`, `url`, `opdateret`.
   - **Dropdown opdelt i to `<optgroup>`:** "Produktionsaftale alene" og "Kræver/forudsætter elkunde hos selskabet".
